@@ -1,6 +1,5 @@
 """PR-005 验收门禁：domain 层不得依赖 FastAPI/SQLAlchemy/厂商 SDK。"""
 import ast
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

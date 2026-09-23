@@ -11,23 +11,19 @@ import pytest
 
 from pubminer.agents import (
     BoundedEvidenceAgent,
-    CoverageEvaluator,
     DecisionProposal,
     LLMDecider,
     ScriptedDecider,
-    StopPolicy,
 )
 from pubminer.domain.agents import (
     AgentSession,
     Budget,
     BudgetDelta,
-    BudgetState,
     CoverageItem,
     CoverageSnapshot,
     StopReasonKind,
     TaskSpec,
 )
-from pubminer.domain.evidence import Evidence, EvidencePolarity
 from pubminer.application.ports import ToolExecutionResult
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -252,7 +248,6 @@ class TestLLMDeciderContract:
     def test_llm_decider_with_fake_provider(self):
         import json
 
-        from pubminer.application.ports import LLMRequest
         from pubminer.integrations.llm import FakeLLMProvider, LLMGateway, PromptRegistry
 
         payload = json.dumps({

@@ -43,7 +43,7 @@ def session_factory(migrated_db):
 
 def _seed_world(session_factory, *, with_conflict: bool = False):
     """造 documents + entities + claim(s) + evidence，返回 claim id。"""
-    from pubminer.domain.claims import Claim, ClaimContext, Predicate
+    from pubminer.domain.claims import Claim, Predicate
     from pubminer.domain.documents import Document, DocumentIdentifier, DocumentVersion, EvidenceSpan
     from pubminer.domain.evidence import Evidence, EvidencePolarity
     from pubminer.domain.entities import Entity, EntityIdentifier

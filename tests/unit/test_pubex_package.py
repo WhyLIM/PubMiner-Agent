@@ -1,4 +1,3 @@
-import ssl
 import subprocess
 import sys
 from pathlib import Path
@@ -76,7 +75,6 @@ class TestLegacyCsvRoundTrip:
     def test_missing_article_defaults_na_in_csv(self, tmp_path):
         import pandas as pd
 
-        from pubex.models.identifiers import ArticleIdentifiers
 
         bare = medline_record_to_article({"PMID": "1"})
         out = write_legacy_csv([bare], tmp_path / "bare.csv")

@@ -50,9 +50,8 @@ def app_client(migrated_db: Path):
 def _fake_ports():
     """与 test_mining_workflow 相同形状的 fake 端口（轻量版，单文档）。"""
     from types import SimpleNamespace
-    from uuid import uuid4
 
-    from pubminer.domain.documents import Document, DocumentIdentifier, DocumentVersion, EvidenceSpan
+    from pubminer.domain.documents import Document, DocumentIdentifier, DocumentVersion
     from pubminer.domain.evidence import BiomarkerEvidence
     from pubminer.domain.screening import ScreeningDecision, ScreeningLabel
     from pubminer.workflows.ports import HydratedDocument

@@ -192,7 +192,7 @@ class TestClaimRepository:
     def test_create_claim_with_evidence_and_dedupe(self, session_factory):
         from pubminer.domain.claims import Claim, ClaimContext, Direction, Predicate
         from pubminer.domain.documents import EvidenceSpan
-        from pubminer.domain.evidence import Evidence, EvidencePolarity, Statistics, StudyAttributes
+        from pubminer.domain.evidence import Evidence, EvidencePolarity, Statistics
         from pubminer.infrastructure.db.base import session_scope
         from pubminer.infrastructure.db.repositories.claims import ClaimRepository
 
@@ -233,7 +233,7 @@ class TestClaimRepository:
     def test_no_evidence_no_claim(self, session_factory):
         from pubminer.domain.claims import Claim, Predicate
         from pubminer.infrastructure.db.base import session_scope
-        from pubminer.infrastructure.db.repositories.claims import ClaimRepository, NoEvidenceError
+        from pubminer.infrastructure.db.repositories.claims import ClaimRepository
 
         with session_scope(session_factory) as session:
             gene, *_ , doc, version_id, _ = self._seed(session)

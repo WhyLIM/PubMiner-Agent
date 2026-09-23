@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from pubminer.domain.documents import Document, DocumentIdentifier
-from pubminer.workflows.ports import HydratedDocument, SearchIntent
+from pubminer.workflows.ports import HydratedDocument
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

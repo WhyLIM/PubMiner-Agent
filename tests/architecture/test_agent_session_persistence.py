@@ -43,7 +43,6 @@ class TestAgentSessionPersistence:
     def test_full_lifecycle_persist_and_replay(self, session_factory):
         from pubminer.domain.agents import (
             AgentAction,
-            AgentMessage,
             BudgetDelta,
             CoverageItem,
             CoverageSnapshot,

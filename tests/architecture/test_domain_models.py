@@ -35,7 +35,6 @@ from pubminer.domain.evidence import (
     AnalysisType,
     Evidence,
     EvidencePolarity,
-    StudyDesign,
     VerificationResult,
 )
 from pubminer.domain.reviews import Review, ReviewDecision, ReviewTarget, ReviewTargetType

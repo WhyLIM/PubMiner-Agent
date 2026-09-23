@@ -65,6 +65,14 @@ cd webui && pnpm install && pnpm dev
 
 配置示例见 `.env.example`；`PUBMINER_LLM_PROTOCOL` 可固定为 `responses|anthropic|completions` 跳过探测。协议细节只在 `src/pubminer/integrations/llm/providers/` 内实现（Responses：`POST {base}/responses`；Anthropic：`POST {base}/v1/messages` + `x-api-key`；Completions：`POST {base}/chat/completions`）。
 
+## 示例
+
+```bash
+.venv/Scripts/python.exe examples/offline_demo.py
+```
+
+零配置离线跑通完整管线（检索→筛选→抽取→归一化→验证→聚合），打印任务步骤与带原文 span 的候选结论；真实适配器如何替换 fake 见 `examples/offline_demo.py` 文件头注释。`tests/test_examples.py` 守护该样例始终可运行。
+
 ## 测试
 
 ```bash
