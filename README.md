@@ -49,6 +49,22 @@ cd webui && pnpm install && pnpm dev
 
 缺 NCBI/LLM 配置时 API 仍可启动（会话与审核可用；检索任务返回 503 并说明缺哪个变量）。
 
+### LLM 厂商与协议支持
+
+接入层默认 `PUBMINER_LLM_PROTOCOL=auto`，按 **Responses API → Anthropic Messages → Chat Completions** 优先级运行时探测，粘住首个可用协议；404/405/501 视为协议不可用自动降级，401/429/500 等真实错误不降级直接抛出。
+
+| 厂商 | Responses | Anthropic Messages | Completions（兜底） |
+|---|---|---|---|
+| OpenAI / Azure | ✅ 原生 | ❌ | ✅ |
+| DeepSeek（V4+） | ✅ | ❌ | ✅ |
+| 智谱 GLM | ✅ `/api/paas/v4/responses` | ✅ `/api/anthropic` | ✅ |
+| Moonshot Kimi | ✅ | ✅ | ✅ |
+| MiniMax | 未确认 | ✅ `/anthropic` | ✅ |
+| Anthropic | ❌ | ✅ 原生 | ❌ |
+| Gemini / Qwen 兼容层、旧网关 | ❌ | ❌ | ✅ |
+
+配置示例见 `.env.example`；`PUBMINER_LLM_PROTOCOL` 可固定为 `responses|anthropic|completions` 跳过探测。协议细节只在 `src/pubminer/integrations/llm/providers/` 内实现（Responses：`POST {base}/responses`；Anthropic：`POST {base}/v1/messages` + `x-api-key`；Completions：`POST {base}/chat/completions`）。
+
 ## 测试
 
 ```bash

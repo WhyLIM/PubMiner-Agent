@@ -44,6 +44,7 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
     llm_base = env.get("PUBMINER_LLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
     llm_key = env.get("PUBMINER_LLM_API_KEY", "")
     llm_model = env.get("PUBMINER_LLM_MODEL", "glm-4-flash")
+    llm_protocol = env.get("PUBMINER_LLM_PROTOCOL", "auto")
     if not llm_key:
         missing.append("PUBMINER_LLM_API_KEY")
 
@@ -60,7 +61,7 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
             PubexSearchAdapter,
         )
         from pubminer.integrations.llm import LLMGateway, PromptRegistry
-        from pubminer.integrations.llm.providers.openai_compat import OpenAICompatibleProvider
+        from pubminer.integrations.llm.providers import build_llm_provider
         from pubminer.integrations.loop_runner import LoopRunner
         from pubminer.integrations.tools import ToolRegistry, ToolResult
         from pubex.clients import AsyncPubMedClient, PMCFulltextClient
@@ -70,7 +71,10 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
         pmc_client = PMCFulltextClient(cache_dir=env.get("PUBMINER_PMC_CACHE", "./download/pmc_cache"))
         prompt_registry = PromptRegistry.discover()
 
-        gateway = LLMGateway(OpenAICompatibleProvider(llm_key, llm_model, base_url=llm_base))
+        protocol = env.get("PUBMINER_LLM_PROTOCOL", "auto").strip().lower()
+        # 协商优先级：Responses API -> Anthropic Messages -> Chat Completions
+        llm_provider = build_llm_provider(llm_key, llm_model, base_url=llm_base, protocol=protocol)
+        gateway = LLMGateway(llm_provider)
         registry = ToolRegistry()
         from pubminer.integrations.tools import builtin_tool_specs
 
@@ -88,7 +92,7 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
             normalize=EntrezGeneResolver(loop, email=email, api_key=api_key),
             verify=LlmVerifyPort(gateway, prompt_registry),
         )
-        notes.append(f"real ports wired: LLM={llm_model}, NCBI as {email}")
+        notes.append(f"real ports wired: LLM={llm_model} protocol={llm_protocol}, NCBI as {email}")
     else:
         notes.append("missing env: " + ", ".join(missing) + " -- workflow disabled (503)")
 
