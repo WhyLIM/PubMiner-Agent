@@ -1,0 +1,516 @@
+"""FastAPI 应用工厂：/api/v1 路由、错误模型、SSE 事件流。"""
+from __future__ import annotations
+
+import json
+from uuid import UUID
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+
+from pubminer.infrastructure.db.base import session_scope
+
+from pubminer.api import schemas
+from pubminer.api.deps import Container
+from pubminer.domain.tasks import TaskStatus
+from pubminer.workflows import MiningWorkflow, SearchIntent
+from pubminer.workflows.mining import WorkflowFatalError
+
+
+def create_app(container: Container) -> FastAPI:
+    app = FastAPI(title="PubMiner Evidence Agent API", version="v1")
+
+    # ------------------------------------------------------------ 错误模型 §10.2
+
+    @app.exception_handler(HTTPException)
+    async def http_error_handler(request: Request, exc: HTTPException):
+        payload = {
+            "error": {
+                "code": _code_for_status(exc.status_code),
+                "message": str(exc.detail),
+                "retryable": exc.status_code >= 500,
+                "details": getattr(exc, "details", {}) or {},
+            },
+            "request_id": container.next_request_id(),
+        }
+        return JSONResponse(status_code=exc.status_code, content=payload)
+
+    @app.exception_handler(Exception)
+    async def unhandled_error_handler(request: Request, exc: Exception):
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "code": "INTERNAL",
+                    "message": "internal error; see server logs",
+                    "retryable": True,
+                    "details": {},
+                },
+                "request_id": container.next_request_id(),
+            },
+        )
+
+    # ------------------------------------------------------------ helpers
+
+    def _parse_uuid(value: str, what: str) -> UUID:
+        try:
+            return UUID(value)
+        except ValueError:
+            raise HTTPException(404, f"{what} not found")
+
+    def _require_session(session_id: str):
+        with session_scope(container.session_factory) as session:
+            found = container.session_service(session).load_for_replay(_parse_uuid(session_id, "session"))
+            return found.model_dump(mode="json")
+
+    # ------------------------------------------------------------ health
+
+    @app.get("/api/v1/health")
+    def health():
+        return {"status": "ok", "version": "v1"}
+
+    @app.get("/api/v1/schemas")
+    def list_schemas():
+        return {
+            "schemas": [
+                {"name": "biomarker_evidence", "version": "biomarker-v1", "status": "active"}
+            ]
+        }
+
+    # ------------------------------------------------------------ agent sessions
+
+    @app.post("/api/v1/agent/sessions", status_code=201, response_model=schemas.CreateSessionResponse)
+    def create_session(body: schemas.CreateSessionRequest):
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            created = service.create_session(
+                schemas.CreateSessionRequest(
+                    goal=body.goal, user_id=body.user_id, limits=body.limits
+                )
+            )
+            return schemas.CreateSessionResponse(
+                session_id=str(created.id), status=created.status.value, next="ASK_HUMAN"
+            )
+
+    @app.post("/api/v1/agent/sessions/{session_id}/messages", status_code=201)
+    def post_message(session_id: str, body: schemas.PostMessageRequest):
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            message = service.post_message(
+                _parse_uuid(session_id, "session"), body.role, body.content, body.kind, body.payload
+            )
+            return {"message_id": str(message.id), "ok": True}
+
+    @app.post("/api/v1/agent/sessions/{session_id}/task-spec", status_code=200)
+    def bind_task_spec(session_id: str, body: schemas.BindTaskSpecRequest):
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            try:
+                spec = service.bind_task_spec(_parse_uuid(session_id, "session"), body, goal_text=body.disease or "")
+            except LookupError as exc:
+                raise HTTPException(404, str(exc))
+            return {
+                "schema_version": spec.schema_version,
+                "missing_required_fields": spec.missing_required_fields(),
+            }
+
+    @app.post("/api/v1/agent/sessions/{session_id}/plan", status_code=202)
+    def submit_plan(session_id: str, body: schemas.SubmitPlanRequest):
+        from pubminer.domain.agents import Plan, PlanStep
+
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            current = service.load_for_replay(_parse_uuid(session_id, "session"))
+            plan = Plan(
+                version=current.current_plan_version + 1,
+                rationale=body.rationale,
+                steps=[PlanStep.model_validate(s.model_dump()) for s in body.steps],
+            )
+            service.submit_plan(_parse_uuid(session_id, "session"), plan)
+            return {"plan_version": plan.version, "status": "PLANNED"}
+
+    @app.post("/api/v1/agent/sessions/{session_id}/plan/approve", status_code=200)
+    def approve_plan(session_id: str, body: schemas.ApprovePlanRequest):
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            try:
+                service.approve_plan(_parse_uuid(session_id, "session"), body.plan_version)
+            except ValueError as exc:
+                raise HTTPException(409, str(exc))
+            except LookupError as exc:
+                raise HTTPException(404, str(exc))
+            return {"approved": body.plan_version}
+
+    @app.get("/api/v1/agent/sessions/{session_id}", response_model_exclude_none=True)
+    def get_session(session_id: str) -> schemas.SessionResponse:
+        try:
+            data = _require_session(session_id)
+        except (LookupError, ValueError):
+            raise HTTPException(404, f"session {session_id} not found")
+        data["session_id"] = data.pop("id")
+        return data
+
+    @app.post("/api/v1/agent/sessions/{session_id}/actions/pause", status_code=200)
+    def pause_session(session_id: str):
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            try:
+                service.repository.update_status(_parse_uuid(session_id, "session"), "PAUSED")
+            except LookupError as exc:
+                raise HTTPException(404, str(exc))
+            return {"status": "PAUSED"}
+
+    @app.get("/api/v1/agent/sessions/{session_id}/events")
+    def session_events(session_id: str, since: int = 0, format: str = "sse", max_events: int = 100) -> schemas.SessionEventsResponse:
+        """行动事件流：SSE（默认）或 JSON（format=json，供测试/降级）。"""
+        try:
+            data = _require_session(session_id)
+        except (LookupError, ValueError):
+            raise HTTPException(404, f"session {session_id} not found")
+
+        actions = data.get("actions", [])
+        events = [
+            {
+                "seq": index + 1,
+                "type": "action",
+                "action_id": action["id"],
+                "turn": action["turn"],
+                "action_type": action["action_type"],
+                "tool_name": action.get("tool_name"),
+                "status": action["status"],
+                "summary": action.get("result_summary", ""),
+            }
+            for index, action in enumerate(actions)
+            if index + 1 > since
+        ][:max_events]
+
+        if format == "json":
+            return schemas.SessionEventsResponse(events=events, next_since=since + len(events))
+
+        def stream():
+            for event in events:
+                yield f"id: {event['seq']}\nevent: action\ndata: {json.dumps(event)}\n\n"
+
+        return StreamingResponse(
+            stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"}
+        )
+
+    # ------------------------------------------------------------ mining tasks
+
+    @app.post("/api/v1/tasks", status_code=202)
+    def create_task(body: schemas.CreateTaskRequest):
+        if container.workflow_ports is None:
+            raise HTTPException(503, "workflow ports not configured")
+        intents = [
+            SearchIntent(
+                name=i.get("name", "discovery"),
+                query=i.get("query", ""),
+                max_results=int(i.get("max_results", 50)),
+            )
+            for i in body.intents
+        ]
+        session_id = UUID(body.session_id) if body.session_id else None
+        with session_scope(container.session_factory) as session:
+            workflow = MiningWorkflow(
+                container.workflow_ports,
+                document_repo_factory=DocumentRepositoryOf,
+                claim_repo_factory=ClaimRepositoryOf,
+                entity_repo_factory=EntityRepositoryOf,
+                task_repo=container.task_repository(session),
+                pipeline_release=container.pipeline_release,
+            )
+            try:
+                task_id = workflow.start(session_id=session_id, intents=intents)
+            except WorkflowFatalError as exc:
+                raise HTTPException(422, str(exc))
+            task = container.task_repository(session).get(task_id)
+            return {"task_id": str(task_id), "status": task.status.value if task else "CREATED"}
+
+    @app.get("/api/v1/tasks/{task_id}")
+    def get_task(task_id: str) -> schemas.TaskResponse:
+        with session_scope(container.session_factory) as session:
+            repo = container.task_repository(session)
+            task = repo.get(_parse_uuid(task_id, "task"))
+            if task is None:
+                raise HTTPException(404, f"task {task_id} not found")
+            return schemas.TaskResponse(
+                task_id=str(task.id),
+                session_id=str(task.session_id) if task.session_id else None,
+                status=task.status.value,
+                steps=[schemas.TaskStepResponse(**step) for step in repo.list_steps(task.id)],
+            )
+
+    @app.post("/api/v1/tasks/{task_id}/actions/resume", status_code=202)
+    def resume_task(task_id: str):
+        if container.workflow_ports is None:
+            raise HTTPException(503, "workflow ports not configured")
+        with session_scope(container.session_factory) as session:
+            workflow = MiningWorkflow(
+                container.workflow_ports,
+                document_repo_factory=DocumentRepositoryOf,
+                claim_repo_factory=ClaimRepositoryOf,
+                entity_repo_factory=EntityRepositoryOf,
+                task_repo=container.task_repository(session),
+                pipeline_release=container.pipeline_release,
+            )
+            try:
+                workflow.resume(_parse_uuid(task_id, "task"))
+            except LookupError as exc:
+                raise HTTPException(404, str(exc))
+            task = container.task_repository(session).get(_parse_uuid(task_id, "task"))
+            return {"task_id": task_id, "status": task.status.value}
+
+    @app.post("/api/v1/tasks/{task_id}/actions/cancel", status_code=200)
+    def cancel_task(task_id: str):
+        with session_scope(container.session_factory) as session:
+            repo = container.task_repository(session)
+            try:
+                repo.update_status(_parse_uuid(task_id, "task"), TaskStatus.CANCELLED)
+            except LookupError as exc:
+                raise HTTPException(404, str(exc))
+            return {"task_id": task_id, "status": "CANCELLED"}
+
+    # ------------------------------------------------------------ claims
+
+    @app.get("/api/v1/claims")
+    def list_claims(status: str = "CANDIDATE", limit: int = 50) -> schemas.ClaimsResponse:
+        from sqlalchemy import select
+
+        from pubminer.infrastructure.db.orm_claims import ClaimRow
+
+        with session_scope(container.session_factory) as session:
+            rows = session.execute(
+                select(ClaimRow).where(ClaimRow.status == status).limit(min(limit, 200))
+            ).scalars().all()
+            claims = []
+            for row in rows:
+                polarities: dict[str, int] = {}
+                for ev in row.evidence_items:
+                    polarities[ev.polarity] = polarities.get(ev.polarity, 0) + 1
+                claims.append(
+                    schemas.ClaimResponse(
+                        claim_id=str(row.id),
+                        canonical_signature=row.canonical_signature,
+                        status=row.status,
+                        predicate=row.predicate,
+                        direction=row.direction,
+                        evidence_count=len(row.evidence_items),
+                        polarities=polarities,
+                    )
+                )
+            return schemas.ClaimsResponse(claims=claims)
+
+    # ------------------------------------------------------------ claim evidence（PR-012）
+
+    @app.get("/api/v1/claims/{claim_id}/evidence")
+    def get_claim_evidence(claim_id: str) -> schemas.ClaimEvidenceResponse:
+        from pubminer.infrastructure.db.orm_documents import DocumentVersionRow
+
+        cid = _parse_uuid(claim_id, "claim")
+        with session_scope(container.session_factory) as session:
+            claim_repo = container.claim_repository(session)
+            claim = claim_repo.get(cid)
+            if claim is None:
+                raise HTTPException(404, f"claim {claim_id} not found")
+            evidences = claim_repo.get_evidence(cid)
+            items: list[schemas.ClaimEvidenceItem] = []
+            for ev in evidences:
+                version_row = session.get(DocumentVersionRow, ev.document_version_id)
+                items.append(
+                    schemas.ClaimEvidenceItem(
+                        evidence_id=str(ev.id),
+                        polarity=ev.polarity.value,
+                        span=schemas.ClaimEvidenceSpan(
+                            document_version_id=str(ev.document_version_id),
+                            passage_id=str(ev.passage_id),
+                            section_path=ev.span.section_path,
+                            start_char=ev.span.start_char,
+                            end_char=ev.span.end_char,
+                            text=ev.span.text,
+                        ),
+                        study=ev.study.model_dump(mode="json"),
+                        statistics=ev.statistics.model_dump(mode="json") if ev.statistics else None,
+                        review_status=ev.review_status,
+                        document_version_id=str(ev.document_version_id),
+                        document_title=version_row.title if version_row else "",
+                        canonical_text=version_row.canonical_text if version_row else "",
+                    )
+                )
+            return schemas.ClaimEvidenceResponse(
+                claim_id=str(cid),
+                canonical_signature=claim.canonical_signature,
+                evidence=items,
+            )
+
+    # ------------------------------------------------------------ 跨论文验证 / 覆盖 / 审核（PR-013）
+
+    @app.get("/api/v1/verification/aggregations")
+    def verification_aggregations(limit: int = 200) -> schemas.AggregationsResponse:
+        from pubminer.workflows.verification import CrossPaperVerifier
+
+        with session_scope(container.session_factory) as session:
+            verifier = CrossPaperVerifier(container.claim_repository(session))
+            return schemas.AggregationsResponse(
+                aggregations=[schemas.AggregationItem(**agg.to_dict()) for agg in verifier.aggregate(session, limit=limit)]
+            )
+
+    @app.get("/api/v1/agent/sessions/{session_id}/coverage")
+    def session_coverage(session_id: str) -> schemas.CoverageResponse:
+        from pubminer.workflows.verification import CrossPaperVerifier
+
+        sid = _parse_uuid(session_id, "session")
+        with session_scope(container.session_factory) as session:
+            verifier = CrossPaperVerifier(container.claim_repository(session))
+            snapshot = verifier.coverage_snapshot(session, sid)
+            return schemas.CoverageResponse(
+                session_id=str(snapshot.session_id),
+                questions=[q.model_dump() for q in snapshot.questions],
+                support_count=snapshot.support_count,
+                contradict_count=snapshot.contradict_count,
+                no_effect_count=snapshot.no_effect_count,
+                independent_validation_found=snapshot.independent_validation_found,
+                unresolved_gaps=snapshot.unresolved_gaps,
+                recommended_next_action=snapshot.recommended_next_action,
+            )
+
+    @app.get("/api/v1/reviews/queue")
+    def review_queue() -> schemas.ReviewQueueResponse:
+        from collections import Counter
+
+        with session_scope(container.session_factory) as session:
+            claim_repo = container.claim_repository(session)
+            from pubminer.workflows.verification import CrossPaperVerifier
+
+            verifier = CrossPaperVerifier(claim_repo)
+            items: list[schemas.ReviewQueueItem] = []
+            for agg in verifier.aggregate(session):
+                if agg.status not in ("CANDIDATE", "REVIEWED"):
+                    continue
+                claim = claim_repo.get(agg.claim_id)
+                assert claim is not None
+                evidences = claim_repo.get_evidence(agg.claim_id)
+                polarities = Counter(e.polarity.value for e in evidences)
+                priority = "conflict" if agg.has_conflict else (
+                    "needs_review" if agg.needs_review else "normal"
+                )
+                items.append(
+                    schemas.ReviewQueueItem(
+                        claim_id=str(agg.claim_id),
+                        canonical_signature=agg.canonical_signature,
+                        status=agg.status,
+                        priority=priority,
+                        reasons=agg.reasons,
+                        evidence_count=len(evidences),
+                        polarities=dict(polarities),
+                    )
+                )
+            # 冲突 > 需复核 > 普通
+            order = {"conflict": 0, "needs_review": 1, "normal": 2}
+            items.sort(key=lambda i: order[i.priority])
+            return schemas.ReviewQueueResponse(items=items)
+
+    @app.post("/api/v1/reviews/decision", status_code=201)
+    def submit_review_decision(body: schemas.ReviewDecisionRequest) -> schemas.ReviewDecisionResponse:
+        from pubminer.domain.claims import ClaimStatus
+        from pubminer.domain.reviews import Review, ReviewDecision, ReviewTarget, ReviewTargetType
+        from pubminer.infrastructure.db.repositories.reviews import ReviewRepository
+
+        decision = ReviewDecision(body.decision)
+        with session_scope(container.session_factory) as session:
+            claim_repo = container.claim_repository(session)
+            review_repo = ReviewRepository(session)
+            claim = claim_repo.get(_parse_uuid(body.claim_id, "claim"))
+            if claim is None:
+                raise HTTPException(404, f"claim {body.claim_id} not found")
+            if claim.status not in (ClaimStatus.CANDIDATE, ClaimStatus.REVIEWED):
+                raise HTTPException(409, f"claim in status {claim.status.value} is not reviewable")
+            if claim.version != body.expected_version:
+                raise HTTPException(409, "stale review: claim version changed (optimistic lock)")
+
+            before = claim.model_dump(mode="json", exclude={"id", "created_at", "updated_at"})
+
+            if decision == ReviewDecision.ACCEPT:
+                claim.transition(ClaimStatus.REVIEWED, actor=body.reviewer_id)
+            elif decision == ReviewDecision.REJECT:
+                claim.transition(ClaimStatus.REJECTED, actor=body.reviewer_id)
+            elif decision == ReviewDecision.EDIT_ACCEPT:
+                from pubminer.domain.claims import Direction, Predicate
+
+                for field_name, value in body.revision.items():
+                    if field_name == "direction" and value:
+                        claim.direction = Direction(str(value).upper())
+                    elif field_name == "object_value" and value:
+                        claim.object_value = str(value)
+                    elif field_name == "predicate" and value:
+                        claim.predicate = Predicate(str(value).upper())
+                    # 其他字段暂不开放修改；identifier 类修改必须走 resolver（ADR-006）
+                claim.version += 1
+                claim.transition(ClaimStatus.REVIEWED, actor=body.reviewer_id)
+            elif decision == ReviewDecision.NEEDS_REVIEW:
+                pass  # 保持 CANDIDATE，仅记录审核轨迹
+
+            # 把决定写回 DB（领域对象不会自动同步 ORM 行）
+            from pubminer.infrastructure.db.orm_claims import ClaimRow
+
+            row = session.get(ClaimRow, claim.id)
+            if row is None:
+                raise HTTPException(404, f"claim {body.claim_id} not found")
+            row.status = claim.status.value
+            row.version = claim.version
+            row.direction = claim.direction.value
+            row.predicate = claim.predicate.value
+            row.object_value = claim.object_value
+            row.canonical_signature = claim.canonical_signature
+            row.updated_at = claim.updated_at
+            session.flush()
+
+            review = review_repo.add(
+                Review(
+                    target=ReviewTarget(type=ReviewTargetType.CLAIM, id=claim.id),
+                    decision=decision,
+                    reviewer_id=body.reviewer_id,
+                    before=before,
+                    after=body.revision or None,
+                    reason=body.reason,
+                )
+            )
+            return schemas.ReviewDecisionResponse(
+                ok=True,
+                claim_status=claim.status.value,
+                claim_version=claim.version,
+                review_id=str(review.id),
+            )
+
+    return app
+
+
+# ---- 装配辅助（避免在路由内闭包内重复定义） ----
+
+def DocumentRepositoryOf(session):
+    from pubminer.infrastructure.db.repositories.documents import DocumentRepository
+
+    return DocumentRepository(session)
+
+
+def ClaimRepositoryOf(session):
+    from pubminer.infrastructure.db.repositories.claims import ClaimRepository
+
+    return ClaimRepository(session)
+
+
+def EntityRepositoryOf(session):
+    from pubminer.infrastructure.db.repositories.entities import EntityRepository
+
+    return EntityRepository(session)
+
+
+def _code_for_status(status: int) -> str:
+    return {
+        400: "BAD_REQUEST",
+        401: "UNAUTHORIZED",
+        403: "PERMISSION_DENIED",
+        404: "NOT_FOUND",
+        409: "CONFLICT",
+        422: "SCHEMA_UNSATISFIABLE",
+        429: "RATE_LIMITED",
+        503: "SOURCE_UNAVAILABLE",
+    }.get(status, "INTERNAL" if status >= 500 else "BAD_REQUEST")

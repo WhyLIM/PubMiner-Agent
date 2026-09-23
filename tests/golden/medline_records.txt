@@ -1,0 +1,55 @@
+PMID- 33145284
+TI  - KRAS gene status as a prognostic biomarker in pancreatic ductal adenocarcinoma: a retrospective cohort study.
+STAT- PubMed - indexed for MEDLINE
+LR  - 20260115
+IS  - 1932-6203 (Electronic)
+PT  - Journal Article
+PT  - Multicenter Study
+DP  - 2021 Jan 5
+DEP - 20201222
+PL  - United States
+FAU - Zhang, Wei
+FAU - Ito, Takashi
+AU  - Zhang W
+AU  - Ito T
+AD  - Department of Oncology, Example University Hospital, Wuhan, China.
+AD  - Division of Hepatobiliary Surgery, Example Institute, Tokyo, Japan.
+AB  - BACKGROUND: The role of KRAS status in pancreatic ductal adenocarcinoma (PDAC) prognosis remains debated. METHODS: We analysed 412 patients undergoing curative resection across two centres. RESULTS: Multivariate analysis identified elevated CA 19-9 as an independent predictor of poor overall survival (HR 2.1, 95% CI 1.4-3.2). CONCLUSIONS: KRAS status alone was not associated with survival in this cohort.
+LA  - eng
+OT  - Pancreatic Neoplasms
+OT  - Biomarkers, Tumor
+OT  - KRAS
+VI  - 16
+IP  - 1
+PG  - e0245341
+LID - 10.1371/journal.pone.0245341 [doi]
+PMC - PMC7756730
+PHST - 2020/11/02 00:00 [received]
+PHST - 2020/12/10 00:00 [accepted]
+PHST - 2021/01/05 00:00 [pubmed]
+PHST - 2021/01/06 06:32 [medline]
+PHST - 2021/01/05 00:00 [entrez]
+PST - epublish
+SO  - PLoS One. 2021 Jan 5;16(1):e0245341. doi: 10.1371/journal.pone.0245341
+GR  - R01CA123456/CA/NCI NIH HHS/United States
+GR  - 81872050/National Natural Science Foundation of China
+
+PMID- 34567890
+TI  - Circulating tumor DNA for early detection of pancreatic cancer: a prospective cohort.
+PT  - Journal Article
+DP  - 2023 Sep 14
+PL  - England
+FAU - Rossi, Elena
+AU  - Rossi E
+AB  - Short abstract without structured headings.
+LA  - eng
+PST - ppublish
+SO  - Gut. 2023 Sep 14;72(9):1789-1798
+
+PMID- 35678901
+TI  - Meeting abstract on liquid biopsy methods.
+PT  - Journal Article
+DP  - 2022
+LA  - eng
+PST - ppublish
+SO  - Oncotarget. 2022;13(15 Suppl):S1

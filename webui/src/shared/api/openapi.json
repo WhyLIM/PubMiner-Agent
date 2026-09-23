@@ -1,0 +1,1949 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PubMiner Evidence Agent API",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schemas": {
+      "get": {
+        "summary": "List Schemas",
+        "operationId": "list_schemas_api_v1_schemas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions": {
+      "post": {
+        "summary": "Create Session",
+        "operationId": "create_session_api_v1_agent_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/messages": {
+      "post": {
+        "summary": "Post Message",
+        "operationId": "post_message_api_v1_agent_sessions__session_id__messages_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/task-spec": {
+      "post": {
+        "summary": "Bind Task Spec",
+        "operationId": "bind_task_spec_api_v1_agent_sessions__session_id__task_spec_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindTaskSpecRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/plan": {
+      "post": {
+        "summary": "Submit Plan",
+        "operationId": "submit_plan_api_v1_agent_sessions__session_id__plan_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/plan/approve": {
+      "post": {
+        "summary": "Approve Plan",
+        "operationId": "approve_plan_api_v1_agent_sessions__session_id__plan_approve_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovePlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}": {
+      "get": {
+        "summary": "Get Session",
+        "operationId": "get_session_api_v1_agent_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/actions/pause": {
+      "post": {
+        "summary": "Pause Session",
+        "operationId": "pause_session_api_v1_agent_sessions__session_id__actions_pause_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/events": {
+      "get": {
+        "summary": "Session Events",
+        "description": "\u884c\u52a8\u4e8b\u4ef6\u6d41\uff1aSSE\uff08\u9ed8\u8ba4\uff09\u6216 JSON\uff08format=json\uff0c\u4f9b\u6d4b\u8bd5/\u964d\u7ea7\uff09\u3002",
+        "operationId": "session_events_api_v1_agent_sessions__session_id__events_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Since"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "sse",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "max_events",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Max Events"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionEventsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks": {
+      "post": {
+        "summary": "Create Task",
+        "operationId": "create_task_api_v1_tasks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{task_id}": {
+      "get": {
+        "summary": "Get Task",
+        "operationId": "get_task_api_v1_tasks__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{task_id}/actions/resume": {
+      "post": {
+        "summary": "Resume Task",
+        "operationId": "resume_task_api_v1_tasks__task_id__actions_resume_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{task_id}/actions/cancel": {
+      "post": {
+        "summary": "Cancel Task",
+        "operationId": "cancel_task_api_v1_tasks__task_id__actions_cancel_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims": {
+      "get": {
+        "summary": "List Claims",
+        "operationId": "list_claims_api_v1_claims_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "CANDIDATE",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/{claim_id}/evidence": {
+      "get": {
+        "summary": "Get Claim Evidence",
+        "operationId": "get_claim_evidence_api_v1_claims__claim_id__evidence_get",
+        "parameters": [
+          {
+            "name": "claim_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Claim Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimEvidenceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/verification/aggregations": {
+      "get": {
+        "summary": "Verification Aggregations",
+        "operationId": "verification_aggregations_api_v1_verification_aggregations_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AggregationsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/coverage": {
+      "get": {
+        "summary": "Session Coverage",
+        "operationId": "session_coverage_api_v1_agent_sessions__session_id__coverage_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoverageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/queue": {
+      "get": {
+        "summary": "Review Queue",
+        "operationId": "review_queue_api_v1_reviews_queue_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueueResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/decision": {
+      "post": {
+        "summary": "Submit Review Decision",
+        "operationId": "submit_review_decision_api_v1_reviews_decision_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDecisionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "turn": {
+            "type": "integer",
+            "title": "Turn"
+          },
+          "action_type": {
+            "type": "string",
+            "title": "Action Type"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "result_summary": {
+            "type": "string",
+            "title": "Result Summary",
+            "default": ""
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "turn",
+          "action_type",
+          "status",
+          "created_at"
+        ],
+        "title": "ActionResponse"
+      },
+      "AgentEventItem": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "turn": {
+            "type": "integer",
+            "title": "Turn"
+          },
+          "action_type": {
+            "type": "string",
+            "title": "Action Type"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "turn",
+          "action_type",
+          "status"
+        ],
+        "title": "AgentEventItem"
+      },
+      "AggregationItem": {
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "title": "Claim Id"
+          },
+          "canonical_signature": {
+            "type": "string",
+            "title": "Canonical Signature"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "support_count": {
+            "type": "integer",
+            "title": "Support Count",
+            "default": 0
+          },
+          "contradict_count": {
+            "type": "integer",
+            "title": "Contradict Count",
+            "default": 0
+          },
+          "no_effect_count": {
+            "type": "integer",
+            "title": "No Effect Count",
+            "default": 0
+          },
+          "uncertain_count": {
+            "type": "integer",
+            "title": "Uncertain Count",
+            "default": 0
+          },
+          "independent_validation": {
+            "type": "boolean",
+            "title": "Independent Validation",
+            "default": false
+          },
+          "has_conflict": {
+            "type": "boolean",
+            "title": "Has Conflict",
+            "default": false
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review",
+            "default": false
+          },
+          "distinct_documents": {
+            "type": "integer",
+            "title": "Distinct Documents",
+            "default": 0
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_id",
+          "canonical_signature",
+          "status"
+        ],
+        "title": "AggregationItem"
+      },
+      "AggregationsResponse": {
+        "properties": {
+          "aggregations": {
+            "items": {
+              "$ref": "#/components/schemas/AggregationItem"
+            },
+            "type": "array",
+            "title": "Aggregations"
+          }
+        },
+        "type": "object",
+        "title": "AggregationsResponse"
+      },
+      "ApprovePlanRequest": {
+        "properties": {
+          "plan_version": {
+            "type": "integer",
+            "title": "Plan Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan_version"
+        ],
+        "title": "ApprovePlanRequest"
+      },
+      "BindTaskSpecRequest": {
+        "properties": {
+          "disease": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disease"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          },
+          "validation_requirement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Requirement"
+          },
+          "year_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year From"
+          },
+          "year_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year To"
+          },
+          "publication_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Publication Types"
+          }
+        },
+        "type": "object",
+        "title": "BindTaskSpecRequest"
+      },
+      "ClaimEvidenceItem": {
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "title": "Evidence Id"
+          },
+          "polarity": {
+            "type": "string",
+            "title": "Polarity"
+          },
+          "span": {
+            "$ref": "#/components/schemas/ClaimEvidenceSpan"
+          },
+          "study": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Study"
+          },
+          "statistics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statistics"
+          },
+          "review_status": {
+            "type": "string",
+            "title": "Review Status",
+            "default": "pending"
+          },
+          "document_version_id": {
+            "type": "string",
+            "title": "Document Version Id",
+            "default": ""
+          },
+          "document_title": {
+            "type": "string",
+            "title": "Document Title",
+            "default": ""
+          },
+          "canonical_text": {
+            "type": "string",
+            "title": "Canonical Text",
+            "description": "span \u6240\u5728\u7684\u56fa\u5b9a canonical text\uff0c\u7528\u4e8e UI \u9ad8\u4eae\u5b9a\u4f4d",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "evidence_id",
+          "polarity",
+          "span"
+        ],
+        "title": "ClaimEvidenceItem"
+      },
+      "ClaimEvidenceResponse": {
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "title": "Claim Id"
+          },
+          "canonical_signature": {
+            "type": "string",
+            "title": "Canonical Signature"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimEvidenceItem"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_id",
+          "canonical_signature"
+        ],
+        "title": "ClaimEvidenceResponse"
+      },
+      "ClaimEvidenceSpan": {
+        "properties": {
+          "document_version_id": {
+            "type": "string",
+            "title": "Document Version Id"
+          },
+          "passage_id": {
+            "type": "string",
+            "title": "Passage Id"
+          },
+          "section_path": {
+            "type": "string",
+            "title": "Section Path",
+            "default": ""
+          },
+          "start_char": {
+            "type": "integer",
+            "title": "Start Char"
+          },
+          "end_char": {
+            "type": "integer",
+            "title": "End Char"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_version_id",
+          "passage_id",
+          "start_char",
+          "end_char",
+          "text"
+        ],
+        "title": "ClaimEvidenceSpan"
+      },
+      "ClaimResponse": {
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "title": "Claim Id"
+          },
+          "canonical_signature": {
+            "type": "string",
+            "title": "Canonical Signature"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "predicate": {
+            "type": "string",
+            "title": "Predicate"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "evidence_count": {
+            "type": "integer",
+            "title": "Evidence Count",
+            "default": 0
+          },
+          "polarities": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Polarities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_id",
+          "canonical_signature",
+          "status",
+          "predicate",
+          "direction"
+        ],
+        "title": "ClaimResponse"
+      },
+      "ClaimsResponse": {
+        "properties": {
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimResponse"
+            },
+            "type": "array",
+            "title": "Claims"
+          }
+        },
+        "type": "object",
+        "title": "ClaimsResponse"
+      },
+      "CoverageQuestionItem": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "support_count": {
+            "type": "integer",
+            "title": "Support Count",
+            "default": 0
+          },
+          "contradict_count": {
+            "type": "integer",
+            "title": "Contradict Count",
+            "default": 0
+          },
+          "no_effect_count": {
+            "type": "integer",
+            "title": "No Effect Count",
+            "default": 0
+          },
+          "uncertain_count": {
+            "type": "integer",
+            "title": "Uncertain Count",
+            "default": 0
+          },
+          "independent_validation_found": {
+            "type": "boolean",
+            "title": "Independent Validation Found",
+            "default": false
+          },
+          "covered": {
+            "type": "boolean",
+            "title": "Covered",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "CoverageQuestionItem"
+      },
+      "CoverageResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/CoverageQuestionItem"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "support_count": {
+            "type": "integer",
+            "title": "Support Count",
+            "default": 0
+          },
+          "contradict_count": {
+            "type": "integer",
+            "title": "Contradict Count",
+            "default": 0
+          },
+          "no_effect_count": {
+            "type": "integer",
+            "title": "No Effect Count",
+            "default": 0
+          },
+          "independent_validation_found": {
+            "type": "boolean",
+            "title": "Independent Validation Found",
+            "default": false
+          },
+          "unresolved_gaps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unresolved Gaps"
+          },
+          "recommended_next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Next Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "title": "CoverageResponse"
+      },
+      "CreateSessionRequest": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Goal",
+            "description": "\u81ea\u7136\u8bed\u8a00\u7814\u7a76\u76ee\u6807"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": "anonymous"
+          },
+          "limits": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Limits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "title": "CreateSessionRequest"
+      },
+      "CreateSessionResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "next": {
+            "type": "string",
+            "title": "Next"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "status",
+          "next"
+        ],
+        "title": "CreateSessionResponse"
+      },
+      "CreateTaskRequest": {
+        "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "intents": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Intents"
+          }
+        },
+        "type": "object",
+        "title": "CreateTaskRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PlanResponse": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale",
+            "default": ""
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PlanStepResponse"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "approved_by_human": {
+            "type": "boolean",
+            "title": "Approved By Human",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "PlanResponse"
+      },
+      "PlanStepResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "action_type": {
+            "type": "string",
+            "title": "Action Type"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "search_intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Intent"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "action_type"
+        ],
+        "title": "PlanStepResponse"
+      },
+      "PostMessageRequest": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "user | agent | system",
+            "default": "user"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Content"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "text"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "PostMessageRequest"
+      },
+      "ReviewDecisionRequest": {
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "title": "Claim Id"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision",
+            "description": "ACCEPT | EDIT_ACCEPT | REJECT | NEEDS_REVIEW"
+          },
+          "reviewer_id": {
+            "type": "string",
+            "title": "Reviewer Id"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "expected_version": {
+            "type": "integer",
+            "title": "Expected Version",
+            "description": "\u4e50\u89c2\u9501\uff1a\u5ba1\u6838\u8005\u770b\u5230\u7684 claim \u7248\u672c"
+          },
+          "revision": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Revision",
+            "description": "EDIT_ACCEPT \u7684\u4fee\u8ba2\u5b57\u6bb5"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_id",
+          "decision",
+          "reviewer_id",
+          "reason",
+          "expected_version"
+        ],
+        "title": "ReviewDecisionRequest"
+      },
+      "ReviewDecisionResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "claim_status": {
+            "type": "string",
+            "title": "Claim Status"
+          },
+          "claim_version": {
+            "type": "integer",
+            "title": "Claim Version"
+          },
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "claim_status",
+          "claim_version",
+          "review_id"
+        ],
+        "title": "ReviewDecisionResponse"
+      },
+      "ReviewQueueItem": {
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "title": "Claim Id"
+          },
+          "canonical_signature": {
+            "type": "string",
+            "title": "Canonical Signature"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "evidence_count": {
+            "type": "integer",
+            "title": "Evidence Count",
+            "default": 0
+          },
+          "polarities": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Polarities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_id",
+          "canonical_signature",
+          "status",
+          "priority"
+        ],
+        "title": "ReviewQueueItem"
+      },
+      "ReviewQueueResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewQueueItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "ReviewQueueResponse"
+      },
+      "SessionEventsResponse": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/AgentEventItem"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "next_since": {
+            "type": "integer",
+            "title": "Next Since",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SessionEventsResponse"
+      },
+      "SessionResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "task_spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskSpecResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanResponse"
+            },
+            "type": "array",
+            "title": "Plans"
+          },
+          "current_plan_version": {
+            "type": "integer",
+            "title": "Current Plan Version",
+            "default": 0
+          },
+          "budget": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Budget"
+          },
+          "budget_state": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Budget State"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Reason"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionResponse"
+            },
+            "type": "array",
+            "title": "Actions"
+          },
+          "turn": {
+            "type": "integer",
+            "title": "Turn",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "goal",
+          "status"
+        ],
+        "title": "SessionResponse"
+      },
+      "SubmitPlanRequest": {
+        "properties": {
+          "rationale": {
+            "type": "string",
+            "title": "Rationale",
+            "default": ""
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PlanStepResponse"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "title": "SubmitPlanRequest"
+      },
+      "TaskResponse": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TaskStepResponse"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "status"
+        ],
+        "title": "TaskResponse"
+      },
+      "TaskSpecResponse": {
+        "properties": {
+          "schema_name": {
+            "type": "string",
+            "title": "Schema Name"
+          },
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version"
+          },
+          "disease": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disease"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          },
+          "validation_requirement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Requirement"
+          },
+          "year_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year From"
+          },
+          "year_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year To"
+          },
+          "missing_required_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Required Fields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema_name",
+          "schema_version"
+        ],
+        "title": "TaskSpecResponse"
+      },
+      "TaskStepResponse": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "type",
+          "status"
+        ],
+        "title": "TaskStepResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

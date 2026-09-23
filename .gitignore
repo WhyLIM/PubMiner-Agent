@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.pytest-tmp/
+*.egg-info/
+build/
+dist/
+
+# 数据库与本地数据
+*.db
+*.db-journal
+download/
+output/
+results/
+logs/
+cache/
+
+# 环境与密钥
+.env
+
+# Node / Next.js（webui）
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# 杂项
+.DS_Store
+.claude/
+CLAUDE.md

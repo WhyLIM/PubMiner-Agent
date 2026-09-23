@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE PubmedArticleSet PUBLIC "-//NLM//DTD PubMedArticle, 1st January 2025//EN" "https://dtd.nlm.nih.gov/ncbi/pubmed/out/pubmed_250101.dtd">
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation Status="PubMed - indexed for MEDLINE" Owner="NLM">
+      <PMID Version="1">33145284</PMID>
+      <Article PubModel="Electronic">
+        <Journal>
+          <ISSN IssnType="Electronic">1932-6203</ISSN>
+          <JournalIssue CitedMedium="Internet">
+            <Volume>16</Volume>
+            <Issue>1</Issue>
+            <PubDate>
+              <Year>2021</Year>
+              <Month>Jan</Month>
+              <Day>5</Day>
+            </PubDate>
+          </JournalIssue>
+          <Title>PLoS ONE</Title>
+          <ISOAbbreviation>PLoS One</ISOAbbreviation>
+        </Journal>
+        <ArticleTitle>KRAS gene status as a prognostic biomarker in pancreatic ductal adenocarcinoma: a retrospective cohort study.</ArticleTitle>
+        <Pagination>
+          <MedlinePgn>e0245341</MedlinePgn>
+        </Pagination>
+        <Abstract>
+          <AbstractText Label="BACKGROUND" NlmCategory="BACKGROUND">The role of KRAS status in pancreatic ductal adenocarcinoma prognosis remains debated.</AbstractText>
+          <AbstractText Label="METHODS" NlmCategory="METHODS">We analysed 412 patients undergoing curative resection across two centres.</AbstractText>
+          <AbstractText Label="RESULTS" NlmCategory="RESULTS">Multivariate analysis identified elevated CA 19-9 as an independent predictor of poor overall survival (HR 2.1, 95% CI 1.4-3.2).</AbstractText>
+        </Abstract>
+        <AuthorList CompleteYN="Y">
+          <Author ValidYN="Y">
+            <LastName>Zhang</LastName>
+            <ForeName>Wei</ForeName>
+            <Initials>W</Initials>
+            <AffiliationInfo><Affiliation>Department of Oncology, Example University Hospital, Wuhan, China.</Affiliation></AffiliationInfo>
+          </Author>
+          <Author ValidYN="Y">
+            <LastName>Ito</LastName>
+            <ForeName>Takashi</ForeName>
+            <Initials>T</Initials>
+          </Author>
+        </AuthorList>
+        <Language>eng</Language>
+        <PublicationTypeList>
+          <PublicationType UI="D016428">Journal Article</PublicationType>
+          <PublicationType UI="D016448">Multicenter Study</PublicationType>
+        </PublicationTypeList>
+        <GrantList CompleteYN="Y">
+          <Grant>
+            <GrantID>R01CA123456</GrantID>
+            <Agency>NCI NIH HHS</Agency>
+            <Country>United States</Country>
+          </Grant>
+        </GrantList>
+      </Article>
+      <MeshHeadingList>
+        <MeshHeading>
+          <DescriptorName UI="D010190" MajorTopicYN="N">Pancreatic Neoplasms</DescriptorName>
+        </MeshHeading>
+      </MeshHeadingList>
+      <KeywordList Owner="NOTNLM">
+        <Keyword>PDAC</Keyword>
+        <Keyword>KRAS</Keyword>
+      </KeywordList>
+    </MedlineCitation>
+    <PubmedData>
+      <History>
+        <PubMedPubDate PubStatus="received"><Year>2020</Year><Month>11</Month><Day>2</Day></PubMedPubDate>
+        <PubMedPubDate PubStatus="revised"><Year>2020</Year><Month>12</Month><Day>10</Day></PubMedPubDate>
+        <PubMedPubDate PubStatus="pubmed"><Year>2021</Year><Month>1</Month><Day>5</Day></PubMedPubDate>
+      </History>
+      <PublicationStatus>epublish</PublicationStatus>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">33145284</ArticleId>
+        <ArticleId IdType="pii">PONE-D-20-30111</ArticleId>
+        <ArticleId IdType="doi">10.1371/journal.pone.0245341</ArticleId>
+        <ArticleId IdType="pmc">PMC7756730</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+</PubmedArticleSet>

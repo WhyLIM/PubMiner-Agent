@@ -1,0 +1,1 @@
+{"system": "You are a precise biomedical extraction engine. You copy evidence verbatim and never extrapolate.", "schema_version": "biomarker-v1", "model_requirements": "temperature<=0.1", "negative_cases": ["passage without statistics must yield null statistics", "passage without outcome must yield null outcome"]}

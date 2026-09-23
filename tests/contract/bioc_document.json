@@ -1,0 +1,18 @@
+{
+  "documents": [
+    {
+      "id": "PMC7756730",
+      "passages": [
+        {"infons": {"type": "title"}, "text": "KRAS gene status as a prognostic biomarker in pancreatic ductal adenocarcinoma: a retrospective cohort study.", "offset": 0},
+        {"infons": {"type": "abstract", "section_type": "Abstract"}, "text": "The role of KRAS status in PDAC prognosis remains debated. We analysed 412 resected patients across two centres.", "offset": 136},
+        {"infons": {"type": "front", "section_type": "Introduction"}, "text": "Pancreatic ductal adenocarcinoma is among the deadliest cancers, and little is known about which biomarkers independently predict survival after resection. We aimed to clarify the prognostic value of KRAS status in a multicentre retrospective cohort.", "offset": 275},
+        {"infons": {"type": "methods", "section_type": "Methods"}, "text": "We performed a retrospective cohort study of 412 patients who underwent curative resection at two centres. Statistical analysis used multivariable logistic regression, and inclusion criteria followed the study design protocol for data collection.", "offset": 560},
+        {"infons": {"type": "results", "section_type": "Results"}, "text": "Results showed that elevated CA 19-9 was significantly associated with poor overall survival (hazard ratio 2.1, 95% confidence interval 1.4-3.2; p < 0.001). KRAS status alone was not associated with survival in this cohort (table 1).", "offset": 886},
+        {"infons": {"type": "discussion", "section_type": "Discussion"}, "text": "Our findings are consistent with previous studies suggesting that CA 19-9 adds prognostic information beyond KRAS mutation status. This study has limitations including its retrospective design.", "offset": 1258},
+        {"infons": {"type": "conclusions", "section_type": "Conclusions"}, "text": "We conclude that CA 19-9 remains a practical prognostic biomarker in PDAC, and future studies should validate these findings prospectively.", "offset": 1533},
+        {"infons": {"type": "refs", "section_type": "References"}, "text": "1. Smith J et al. Biomarkers in pancreatic cancer. Nat Med. 2019;25:1000-1008.", "offset": 1740},
+        {"infons": {"type": "ack", "section_type": "Acknowledgments"}, "text": "We thank the participating institutions and the funding agency for supporting this work.", "offset": 1820}
+      ]
+    }
+  ]
+}

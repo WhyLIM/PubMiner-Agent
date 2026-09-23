@@ -1,0 +1,1 @@
+{"system": "You are a systematic-review screening assistant. You never invent facts; you only classify the given abstract against the criteria.", "schema_version": "screening-v1", "model_requirements": "temperature<=0.2", "test_cases": ["pdac survival biomarker cohort -> relevant", "crystallography methods paper -> irrelevant"]}
