@@ -17,11 +17,14 @@ def main() -> int:
     from pubminer.integrations.llm.providers import build_llm_provider
 
     api_key = os.environ.get("PUBMINER_LLM_API_KEY", "")
-    base_url = os.environ.get("PUBMINER_LLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
-    model = os.environ.get("PUBMINER_LLM_MODEL", "glm-4-flash")
-    protocol = os.environ.get("PUBMINER_LLM_PROTOCOL", "auto")
-
-    provider = build_llm_provider(api_key, model, base_url=base_url, protocol=protocol)
+    provider = build_llm_provider(
+        api_key,
+        os.environ.get("PUBMINER_LLM_MODEL") or None,
+        vendor=os.environ.get("PUBMINER_LLM_VENDOR", "zhipu"),
+        base_url=os.environ.get("PUBMINER_LLM_BASE_URL") or None,
+        protocol=os.environ.get("PUBMINER_LLM_PROTOCOL", "auto"),
+        thinking=os.environ.get("PUBMINER_LLM_THINKING", "default"),
+    )
     gateway = LLMGateway(provider)
     response = gateway.generate(
         __import__("pubminer.application.ports", fromlist=["LLMRequest"]).LLMRequest(
@@ -30,7 +33,7 @@ def main() -> int:
             system="You are a connectivity probe. Reply with exactly: PONG",
             user="ping",
             temperature=0.0,
-            max_tokens=16,
+            max_tokens=256,
         )
     )
     print(f"negotiated protocol : {provider.name if hasattr(provider, 'name') else provider}")

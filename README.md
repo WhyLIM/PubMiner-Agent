@@ -51,7 +51,16 @@ cd webui && pnpm install && pnpm dev
 
 ### LLM 厂商与协议支持
 
-接入层默认 `PUBMINER_LLM_PROTOCOL=auto`，按 **Responses API → Anthropic Messages → Chat Completions** 优先级运行时探测，粘住首个可用协议；404/405/501 视为协议不可用自动降级，401/429/500 等真实错误不降级直接抛出。
+接入层分三层配置（依据 2026-09 各官方文档核对）：
+
+1. **供应商选择**：`PUBMINER_LLM_VENDOR` = zhipu | zhipu-coding | zai | deepseek | openai | anthropic | moonshot | minimax | qwen | custom。base url 内置于 `src/pubminer/integrations/llm/vendors.py` 注册表（各协议端点不同，如智谱 anthropic 走 `/api/anthropic`）；`PUBMINER_LLM_BASE_URL` 仅作覆盖，模型留空用厂商默认。
+2. **协议协商**：`PUBMINER_LLM_PROTOCOL=auto`（默认）按 **Responses API → Anthropic Messages → Chat Completions** 优先级运行时探测，粘住首个可用协议；404/405/501 视为协议不可用自动降级，401/429/500 等真实错误不降级直接抛出。
+3. **Thinking 控制**：`PUBMINER_LLM_THINKING=default|off|on` 按厂商官方参数自动映射——
+   - 智谱 GLM / Moonshot Kimi：`thinking: {"type": "enabled"|"disabled"}`（GLM-4.5+/K2.6 轮级思考）
+   - 通义 Qwen（DashScope 兼容）：`enable_thinking: true|false`
+   - OpenAI：completions 用 `reasoning_effort`（off→minimal / on→medium）；Responses 用 `reasoning: {effort}`
+   - Anthropic：`thinking: {type: enabled, budget_tokens}`，启用时自动移除 temperature 并抬高 max_tokens（budget 见 `PUBMINER_LLM_THINKING_BUDGET`）
+   - DeepSeek V3.2 / MiniMax M2：默认不注入（DeepSeek 建议用模型变体；M2 思考常开）
 
 | 厂商 | Responses | Anthropic Messages | Completions（兜底） |
 |---|---|---|---|

@@ -16,6 +16,13 @@ class ResponsesApiProvider(HttpJsonProvider):
     name = "responses"
     path = "/responses"
 
+    def __init__(self, api_key: str, model: str, *, base_url: str = "https://open.bigmodel.cn/api/paas/v4",
+                 timeout: float = 60.0, transport: Any = None,
+                 reasoning: dict[str, Any] | None = None) -> None:
+        super().__init__(api_key, model, base_url=base_url, timeout=timeout, transport=transport)
+        # OpenAI 风格思考控制：{"effort": "minimal"|"low"|"medium"|"high"}；其余厂商留空
+        self.reasoning = reasoning or {}
+
     def _payload(self, system: str, user: str, *, temperature: float, max_tokens: int) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self.model,
@@ -26,6 +33,7 @@ class ResponsesApiProvider(HttpJsonProvider):
             payload["instructions"] = system
         if temperature is not None:
             payload["temperature"] = temperature
+        payload.update(self.reasoning)
         return payload
 
     def _parse(self, payload: dict[str, Any]) -> tuple[str, LLMUsage]:

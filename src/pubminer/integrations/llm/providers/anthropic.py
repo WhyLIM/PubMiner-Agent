@@ -17,11 +17,16 @@ class AnthropicProvider(HttpJsonProvider):
     path = "/v1/messages"
     extra_headers = {"anthropic-version": "2023-06-01"}
 
-    def __init__(self, api_key: str, model: str, *, base_url: str, **kwargs) -> None:
+    def __init__(self, api_key: str, model: str, *, base_url: str, thinking_mode: str = "default",
+                 thinking_budget: int = 4096, **kwargs) -> None:
         super().__init__(api_key, model, base_url=base_url, **kwargs)
         # Anthropic 鉴权头：x-api-key（移除基类默认的 Bearer 头）
         self._client.headers["x-api-key"] = api_key
         self._client.headers.pop("Authorization", None)
+        # 官方约束：thinking.enabled 时 temperature 必须为 1（或省略），
+        # 且 budget_tokens < max_tokens
+        self.thinking_mode = thinking_mode
+        self.thinking_budget = max(1024, int(thinking_budget))
 
     def _payload(self, system: str, user: str, *, temperature: float, max_tokens: int) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -31,7 +36,11 @@ class AnthropicProvider(HttpJsonProvider):
         }
         if system:
             payload["system"] = system
-        if temperature is not None:
+        if self.thinking_mode == "on":
+            payload["thinking"] = {"type": "enabled", "budget_tokens": self.thinking_budget}
+            payload["max_tokens"] = max(payload["max_tokens"], self.thinking_budget + 1024)
+            # 启用思考时不得携带 temperature
+        elif temperature is not None:
             payload["temperature"] = temperature
         return payload
 
