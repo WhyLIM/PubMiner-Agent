@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 
+from pubminer.settings import load_env_file
+
 
 def create_default_app():
     from pubminer.api.app import create_app
@@ -15,6 +17,9 @@ def create_default_app():
 
 
 def main() -> None:
+    loaded = load_env_file()
+    if loaded:
+        print(f"[pubminer] loaded {loaded} vars from .env")
     import uvicorn
 
     app = create_default_app()

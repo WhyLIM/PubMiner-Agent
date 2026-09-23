@@ -12,6 +12,8 @@ from pubminer.api.deps import build_container_from_env
 from pubminer.api.schemas import CreateSessionRequest
 from pubminer.application.commands.agent_session import TaskSpecInput
 from pubminer.domain.agents import Plan, PlanStep
+from pubminer.settings import load_env_file
+
 
 def _ensure_schema(session_factory) -> None:
     """开发便利：SQLite 空库时直接建表（生产请用 alembic）。"""
@@ -34,6 +36,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-results", type=int, default=15)
     parser.add_argument("--db", default=None, help="覆盖 PUBMINER_DB_URL")
     args = parser.parse_args(argv)
+
+    loaded = load_env_file()
+    if loaded:
+        print(f"[agent] loaded {loaded} vars from .env")
+    if args.db:
+        import os
+
+        os.environ["PUBMINER_DB_URL"] = args.db
 
     from pubminer.workflows import MiningWorkflow, SearchIntent
     from pubminer.workflows.verification import CrossPaperVerifier
