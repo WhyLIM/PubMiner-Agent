@@ -56,6 +56,7 @@ class LlmScreenPort:
                     criteria=criteria or "biomarker evidence for the stated disease and task",
                 ),
                 temperature=0.1,
+                max_tokens=4096,
                 metadata={"schema_version": "screening-v1"},
             ),
             _ScreenOut,
@@ -115,6 +116,7 @@ class LlmExtractPort:
                 system=prompt.system,
                 user=prompt.render(passage=canonical[:_MAX_CONTEXT_CHARS]),
                 temperature=0.0,
+                max_tokens=8192,
                 metadata={"schema_version": "biomarker-v1"},
             ),
             _ExtractionOut,
@@ -123,15 +125,16 @@ class LlmExtractPort:
 
         results: list[BiomarkerEvidence] = []
         for raw in payload.get("items", []):
-            span_text = str(raw.get("evidence_span", "")).strip()
-            start = canonical.find(span_text) if span_text else -1
-            if start < 0 or not span_text:
+            located = locate_span(canonical, str(raw.get("evidence_span", "")).strip())
+            if located is None:
                 # grounding 失败：丢弃该条（宁可漏，不可造）
                 logger.warning(
-                    "dropped extraction for %r: evidence_span not found verbatim",
+                    "dropped extraction for %r: evidence_span not found in canonical text",
                     raw.get("biomarker_mention"),
                 )
                 continue
+            start, matched_text = located
+            span_text = matched_text
             section = _section_at(hydrated.section_spans, start)
             study_design = raw.get("study_design") or "unknown"
             try:
@@ -143,21 +146,25 @@ class LlmExtractPort:
                 if isinstance(raw.get("statistics"), dict)
                 else None
             )
-            results.append(
-                BiomarkerEvidence(
-                    biomarker_mention=str(raw["biomarker_mention"]),
-                    disease_mention=raw.get("disease_mention") or "",
-                    role=str(raw.get("role", "prognostic")),
-                    direction=raw.get("direction"),
-                    outcome=raw.get("outcome"),
-                    population=Population(),
-                    study_design=design,
-                    statistics=statistics,
-                    evidence_span=EvidenceSpan.from_text(
-                        version_id, uuid4(), span_text, start, section
-                    ),
+            try:
+                results.append(
+                    BiomarkerEvidence(
+                        biomarker_mention=str(raw["biomarker_mention"]),
+                        disease_mention=raw.get("disease_mention") or "",
+                        role=str(raw.get("role", "prognostic")),
+                        direction=raw.get("direction"),
+                        outcome=raw.get("outcome"),
+                        population=Population(),
+                        study_design=design,
+                        statistics=statistics,
+                        evidence_span=EvidenceSpan.from_text(
+                            version_id, uuid4(), span_text, start, section
+                        ),
+                    )
                 )
-            )
+            except Exception as exc:  # 单条字段异常丢弃，不拖垮整篇
+                logger.warning("dropped malformed extraction for %r: %s",
+                               raw.get("biomarker_mention"), exc)
         return results
 
 
@@ -180,6 +187,7 @@ class LlmVerifyPort:
                     passage=evidence.evidence_span.text[:_MAX_CONTEXT_CHARS],
                 ),
                 temperature=0.0,
+                max_tokens=4096,
                 metadata={"schema_version": "verification-v1"},
             ),
             VerificationResult,
@@ -203,6 +211,48 @@ class LlmVerifyPort:
             reasons=[str(r) for r in payload.get("reasons", [])],
             needs_human_review=bool(payload.get("needs_human_review", False)),
         )
+
+
+_QUOTE_MAP = {
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "–": "-", "—": "-", "−": "-", " ": " ",
+}
+
+
+def _normalize_indexed(text: str) -> tuple[str, list[int]]:
+    """引号/连字符归一 + 去空白 + 小写；mapping[i] = 归一化第 i 字符的原始下标。"""
+    out: list[str] = []
+    mapping: list[int] = []
+    for index, ch in enumerate(text):
+        ch = _QUOTE_MAP.get(ch, ch)
+        if ch.isspace():
+            continue
+        out.append(ch.lower())
+        mapping.append(index)
+    return "".join(out), mapping
+
+
+def locate_span(canonical: str, span_text: str) -> tuple[int, str] | None:
+    """返回 (start, matched_text)；先精确匹配，失败再做格式归一化匹配。
+
+    归一化只对齐引号/连字符/空白/大小写等排版差异——语义被改写的 span
+    仍然定位失败并被丢弃（grounding 红线不变）。
+    """
+    if not span_text:
+        return None
+    exact = canonical.find(span_text)
+    if exact >= 0:
+        return exact, span_text
+    norm_canonical, canonical_map = _normalize_indexed(canonical)
+    norm_span, span_map = _normalize_indexed(span_text)
+    if not norm_span:
+        return None
+    found = norm_canonical.find(norm_span)
+    if found < 0:
+        return None
+    start = canonical_map[found]
+    end = canonical_map[found + len(norm_span) - 1] + 1
+    return start, canonical[start:end]
 
 
 def _section_at(section_spans: list, start: int) -> str:

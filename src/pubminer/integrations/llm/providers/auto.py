@@ -39,6 +39,7 @@ class AutoProtocolProvider(LLMProvider):
         base_url: str,
         protocol: str = "auto",
         transport: Callable[[str], Any] | None = None,
+        extra_body: dict[str, Any] | None = None,
     ) -> None:
         self.requested = protocol.strip().lower()
         if self.requested not in ("auto", *PROTOCOL_PRIORITY):
@@ -52,10 +53,16 @@ class AutoProtocolProvider(LLMProvider):
         )
         # transport 工厂：每个候选协议独立注入（测试用 MockTransport）
         self._transport_for = transport or (lambda _name: None)
-        self._candidates = [
-            PROTOCOL_CLASSES[p](api_key, model, base_url=base_url, transport=self._transport_for(p))
-            for p in order
-        ]
+        self._candidates = []
+        for p in order:
+            kwargs: dict[str, Any] = {
+                "base_url": base_url,
+                "transport": self._transport_for(p),
+            }
+            # extra_body 仅 completions 协议支持（其余协议不接受未知字段）
+            if p == "completions" and extra_body:
+                kwargs["extra_body"] = extra_body
+            self._candidates.append(PROTOCOL_CLASSES[p](api_key, model, **kwargs))
         self._active = None
         self.downgrade_log: list[str] = []
 
@@ -92,8 +99,13 @@ def build_llm_provider(
     base_url: str,
     protocol: str = "auto",
     transport: Callable[[str], Any] | None = None,
+    extra_body: dict[str, Any] | None = None,
 ):
     """按配置构造 provider；auto = Responses → Anthropic → completions。"""
     if protocol == "auto":
-        return AutoProtocolProvider(api_key, model, base_url=base_url, protocol="auto", transport=transport)
-    return PROTOCOL_CLASSES[protocol](api_key, model, base_url=base_url, transport=transport)
+        return AutoProtocolProvider(api_key, model, base_url=base_url, protocol="auto",
+                                    transport=transport, extra_body=extra_body)
+    kwargs = {'transport': transport}
+    if protocol == 'completions':
+        kwargs['extra_body'] = extra_body
+    return PROTOCOL_CLASSES[protocol](api_key, model, base_url=base_url, **kwargs)

@@ -288,7 +288,9 @@ class MiningWorkflow:
         for signature, members in clusters.items():
             first_extraction, first_resolution = members[0]
             evidence_model = _extraction_model(first_extraction)
-            subject_entity = self._ensure_entity(entity_repo, first_resolution, evidence_model)
+            subject_entity, unresolved = self._ensure_entity(
+                entity_repo, first_resolution, evidence_model
+            )
             polarity = self._polarity_for(state, first_extraction["biomarker_mention"])
             claim = self._build_claim(signature, subject_entity, evidence_model, state)
             evidence_rows = []
@@ -312,11 +314,14 @@ class MiningWorkflow:
                 )
                 evidence_rows.append(domain_evidence)
             stored = claims_repo.create_candidate_claim(claim, evidence_rows)
+            if unresolved:
+                claims_repo.mark_evidence_needs_review(stored.id)
             created.append(
                 {
                     "claim_id": str(stored.id),
                     "signature": stored.canonical_signature,
                     "evidence_count": len(members),
+                    "needs_review": unresolved,
                 }
             )
         return {"claims": created}
@@ -354,10 +359,28 @@ class MiningWorkflow:
                 return item["pmid"]
         raise WorkflowFatalError("no hydrated document for evidence span")
 
-    def _ensure_entity(self, entity_repo: EntityRepository, resolution: dict | None, evidence) -> Entity:
-        """把 resolver 的 top 候选落成实体行；无 resolver 候选 → 致命错误（禁止猜 ID）。"""
+    def _ensure_entity(
+        self, entity_repo: EntityRepository, resolution: dict | None, evidence
+    ) -> tuple[Entity, bool]:
+        """把 resolver 的 top 候选落成实体行。
+
+        返回 (entity, unresolved)：unresolved=True 表示 resolver 没有给出
+        identifier（如非基因类临床指标）——此时创建无 identifier 的占位
+        实体并把证据标记 needs_review，绝不编造 identifier（ADR-006）。
+        """
         if not resolution or not resolution.get("candidates"):
-            raise WorkflowFatalError("no resolver candidates; refusing to invent identifier (ADR-006)")
+            placeholder = entity_repo.find_by_canonical_name(
+                evidence.biomarker_mention, entity_type=EntityType.GENE.value
+            ) or entity_repo.create_entity(
+                Entity(
+                    type=EntityType.GENE,
+                    canonical_name=evidence.biomarker_mention,
+                    ontology_version="mvp-2026",
+                    aliases=[EntityAlias(alias=evidence.biomarker_mention, is_canonical=True)],
+                    identifiers=[],  # 无 resolver 候选：不编造 identifier，等 curator 补
+                )
+            )
+            return placeholder, True
         top = resolution["candidates"][0]
         identifier = top.get("identifier")
         if not identifier or ":" not in identifier:
@@ -366,7 +389,7 @@ class MiningWorkflow:
         ontology_version = "mvp-2026"
         existing = entity_repo.find_by_identifier(namespace, value, ontology_version)
         if existing is not None:
-            return existing
+            return existing, False
         return entity_repo.create_entity(
             Entity(
                 type=EntityType.GENE,
@@ -386,7 +409,7 @@ class MiningWorkflow:
                     )
                 ],
             )
-        )
+        ), resolution.get("needs_review", False)
 
     def _build_claim(
         self, signature: str, subject_entity: Entity, evidence, state: dict

@@ -11,6 +11,8 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
+from typing import Any
+
 from pydantic import BaseModel, Field, model_validator
 
 from pubminer.domain.documents import EvidenceSpan
@@ -54,13 +56,27 @@ class Population(BaseModel):
 
 
 class Statistics(BaseModel):
-    """效应量与显著性。字符串保留原文表达，防止换算错误。"""
+    """效应量与显著性。字符串保留原文表达，防止换算错误。
+
+    LLM 常把数值输出为 JSON number（如 0.82）；这里宽松转型为字符串，
+    因为原文表达（"0.82"、"2.1e-3"）才是证据的一部分。
+    """
 
     effect_measure: str | None = Field(None, description="HR / OR / RR / beta")
     effect_value: str | None = None
     confidence_interval: str | None = None
     p_value: str | None = None
     statistically_significant: bool | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_numbers_to_str(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for key in ("effect_measure", "effect_value", "confidence_interval", "p_value"):
+                value = data.get(key)
+                if value is not None and not isinstance(value, str):
+                    data[key] = str(value)
+        return data
 
 
 class StudyAttributes(BaseModel):

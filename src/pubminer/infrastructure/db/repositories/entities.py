@@ -27,6 +27,15 @@ class EntityRepository:
         row = self.session.execute(stmt).scalar_one_or_none()
         return self._to_domain(row) if row else None
 
+    def find_by_canonical_name(self, name: str, entity_type: str, ontology_version: str = "mvp-2026") -> Entity | None:
+        stmt = select(EntityRow).where(
+            EntityRow.canonical_name == name,
+            EntityRow.type == entity_type,
+            EntityRow.ontology_version == ontology_version,
+        )
+        row = self.session.execute(stmt).scalar_one_or_none()
+        return self._to_domain(row) if row else None
+
     def create_entity(self, entity: Entity) -> Entity:
         """写入实体及其 resolver 来源的 identifier。"""
         row = EntityRow(

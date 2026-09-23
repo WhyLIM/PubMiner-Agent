@@ -77,6 +77,14 @@ class ClaimRepository:
         self.session.flush()
         return len(evidences)
 
+    def mark_evidence_needs_review(self, claim_id: UUID) -> None:
+        """把该 claim 的全部证据标记 needs_review（resolver 未决等场景）。"""
+        for row in self.session.execute(
+            select(EvidenceRow).where(EvidenceRow.claim_id == claim_id)
+        ).scalars():
+            row.review_status = "needs_review"
+        self.session.flush()
+
     def get_evidence(self, claim_id: UUID) -> list[Evidence]:
         stmt = select(EvidenceRow).where(EvidenceRow.claim_id == claim_id)
         rows = self.session.execute(stmt).scalars().all()

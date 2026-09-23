@@ -73,7 +73,16 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
 
         protocol = env.get("PUBMINER_LLM_PROTOCOL", "auto").strip().lower()
         # 协商优先级：Responses API -> Anthropic Messages -> Chat Completions
-        llm_provider = build_llm_provider(llm_key, llm_model, base_url=llm_base, protocol=protocol)
+        extra_body: dict = {}
+        if env.get("PUBMINER_LLM_EXTRA_BODY"):
+            import json as _json
+
+            try:
+                extra_body = _json.loads(env["PUBMINER_LLM_EXTRA_BODY"])
+            except ValueError:
+                notes.append("PUBMINER_LLM_EXTRA_BODY is not valid JSON; ignored")
+        llm_provider = build_llm_provider(llm_key, llm_model, base_url=llm_base, protocol=protocol,
+                                          extra_body=extra_body)
         gateway = LLMGateway(llm_provider)
         registry = ToolRegistry()
         from pubminer.integrations.tools import builtin_tool_specs
