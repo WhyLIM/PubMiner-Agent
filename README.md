@@ -18,7 +18,7 @@ D:\Study\Project\PubMiner Agent\
 ├── migrations/          # Alembic 0001–0006（可移植类型：生产 PG / 测试 SQLite）
 ├── tests/               # 统一测试套件（unit / contract / golden / architecture）
 ├── docs/adr/            # ADR-001～011
-├── webui/               # Next.js 前端（Agent Workspace /agent · Review UI /review）
+├── webui/               # Vue 3 + Element Plus + ECharts 前端（总览 / · 工作台 /agent · 审核 /review）
 ├── alembic.ini · pytest.ini · pyproject.toml · .env.example
 └── PubMiner_生物医学证据Agent完整设计文档_v1.3.md   # 架构基线
 ```
@@ -42,9 +42,10 @@ set PYTHONUTF8=1
 # 3a) 命令行端到端
 .venv/Scripts/pubminer-agent --goal "寻找2020年以来胰腺癌预后biomarker并确认独立队列验证" --disease "pancreatic cancer"
 
-# 3b) 或前端（:3001，自动连 :8001）
+# 3b) 或前端（:3001，开发态自动代理 /api 到 :8001）
 cd webui && pnpm install && pnpm dev
-#    Agent Workspace: http://localhost:3001/agent   Review UI: http://localhost:3001/review
+#    总览: http://localhost:3001/          Agent 工作台: http://localhost:3001/agent
+#    证据审核: http://localhost:3001/review
 ```
 
 缺 NCBI/LLM 配置时 API 仍可启动（会话与审核可用；检索任务返回 503 并说明缺哪个变量）。
@@ -91,8 +92,8 @@ cd webui && pnpm install && pnpm dev
 ## 测试
 
 ```bash
-.venv/Scripts/python.exe -m pytest tests/        # 153 项：unit + contract + golden + architecture
-cd webui && pnpm exec tsc --noEmit && pnpm build # 前端类型检查 + 构建
+.venv/Scripts/python.exe -m pytest tests/        # 181 项：unit + contract + golden + architecture + api
+cd webui && pnpm exec vue-tsc --noEmit && pnpm build # 前端类型检查 + 构建
 ```
 
 - `tests/golden`：MEDLINE 字段映射以冻结快照为基线（曾与 legacy 实现逐字节比对），防止解析漂移。
