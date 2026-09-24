@@ -224,6 +224,7 @@ class ReviewQueueItem(BaseModel):
     claim_id: str
     canonical_signature: str
     status: str
+    version: int = 1
     priority: str
     reasons: list[str] = Field(default_factory=list)
     evidence_count: int = 0
@@ -261,3 +262,15 @@ class ReviewDecisionResponse(BaseModel):
 
 class AggregationsResponse(BaseModel):
     aggregations: list[AggregationItem] = Field(default_factory=list)
+
+
+class TaskListItem(BaseModel):
+    task_id: str
+    session_id: str | None = None
+    kind: str = "mining"
+    status: str
+    created_at: str
+
+
+class TaskListResponse(BaseModel):
+    tasks: list[TaskListItem] = Field(default_factory=list)

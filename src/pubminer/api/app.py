@@ -78,6 +78,29 @@ def create_app(container: Container) -> FastAPI:
 
     # ------------------------------------------------------------ health
 
+    @app.get("/api/v1/tasks")
+    def list_tasks(limit: int = 20) -> schemas.TaskListResponse:
+        from sqlalchemy import select
+
+        from pubminer.infrastructure.db.orm_tasks import TaskRow
+
+        with session_scope(container.session_factory) as session:
+            rows = session.execute(
+                select(TaskRow).order_by(TaskRow.created_at.desc()).limit(min(limit, 100))
+            ).scalars().all()
+            return schemas.TaskListResponse(
+                tasks=[
+                    schemas.TaskListItem(
+                        task_id=str(r.id),
+                        session_id=str(r.session_id) if r.session_id else None,
+                        kind=r.kind,
+                        status=r.status,
+                        created_at=r.created_at.isoformat(),
+                    )
+                    for r in rows
+                ]
+            )
+
     @app.get("/api/v1/health")
     def health():
         return {"status": "ok", "version": "v1"}
@@ -411,6 +434,7 @@ def create_app(container: Container) -> FastAPI:
                         claim_id=str(agg.claim_id),
                         canonical_signature=agg.canonical_signature,
                         status=agg.status,
+                        version=claim.version,
                         priority=priority,
                         reasons=agg.reasons,
                         evidence_count=len(evidences),
