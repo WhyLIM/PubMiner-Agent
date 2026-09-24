@@ -104,12 +104,14 @@ class MiningWorkflow:
         return self._execute(task, resume_from=0)
 
     def resume(self, task_id: UUID) -> UUID:
-        """从最后一个未成功步骤恢复。"""
+        """从最后一个未成功步骤恢复；全部完成时空操作。"""
         task = self.task_repo.get(task_id)
         if task is None:
             raise LookupError(f"task {task_id} not found")
         failed_index = self.task_repo.first_failed_step_index(task_id)
-        return self._execute(task, resume_from=max(failed_index, 0))
+        if failed_index is None:
+            return task.id
+        return self._execute(task, resume_from=failed_index)
 
     # ------------------------------------------------------------------ engine
 
@@ -276,7 +278,6 @@ class MiningWorkflow:
         created: list[dict] = []
         claims_repo = self.claim_repo_factory(self.task_repo.session)
         entity_repo = self.entity_repo_factory(self.task_repo.session)
-        doc_repo = self.document_repo_factory(self.task_repo.session)
 
         clusters: dict[str, list[dict]] = {}
         for extraction in state.get("extractions", []):

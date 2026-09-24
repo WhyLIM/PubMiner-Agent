@@ -75,7 +75,6 @@ class TestCertificateFailurePolicy:
                 await retry_async(op, max_retries=5, base_wait=0, sleep=lambda *_: asyncio.sleep(0))
             return calls["n"]
 
-        import asyncio
 
         assert asyncio.run(scenario()) == 1, "证书错误必须快速失败，不得重试"
 

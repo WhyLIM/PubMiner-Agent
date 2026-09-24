@@ -32,7 +32,7 @@ class LicenseRecord(BaseModel):
 class Passage(BaseModel):
     """带稳定定位的 passage。offset 相对 document_version 的 canonical text。"""
 
-    passage_id: str = Field(..., description="稳定 ID：{content_version}:{start}:{end}")
+    passage_id: str = Field(..., description="版本内稳定 ID：{start_char}:{end_char}")
     section_path: str = Field(..., description="如 ABSTRACT / RESULTS.2")
     text: str
     start_char: int
@@ -110,27 +110,3 @@ class DocumentVersion(BaseModel):
 
     def estimate_tokens(self, chars_per_token: float = 4.0) -> int:
         return int(self.total_chars() / chars_per_token)
-
-
-#: 与 PubMiner-webui FullTextDocument 兼容的轻量视图（迁移期 convenience）
-class FullTextDocument(BaseModel):
-    pmid: str
-    pmcid: str
-    title: str = ""
-    filtered_text: str = ""
-    sections: dict[str, str] = Field(default_factory=dict)
-    total_chars: int = 0
-    total_tokens_estimate: int = 0
-
-    @classmethod
-    def from_document_version(cls, doc: DocumentVersion) -> "FullTextDocument":
-        sections = {p.section_path: p.text for p in doc.passages}
-        return cls(
-            pmid=doc.pmid or "",
-            pmcid=doc.pmcid or "",
-            title=doc.title,
-            filtered_text=doc.canonical_text,
-            sections=sections,
-            total_chars=doc.total_chars(),
-            total_tokens_estimate=doc.estimate_tokens(),
-        )

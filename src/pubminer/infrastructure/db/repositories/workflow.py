@@ -93,7 +93,8 @@ class TaskRepository:
             return None
         return dict(row.output_summary or {})
 
-    def first_failed_step_index(self, task_id: UUID) -> int:
+    def first_failed_step_index(self, task_id: UUID) -> int | None:
+        """返回第一个需要（重）执行的步骤下标；全部完成时返回 None。"""
         rows = self.session.execute(
             select(RunStepRow)
             .where(RunStepRow.task_id == task_id)
@@ -102,7 +103,7 @@ class TaskRepository:
         for row in rows:
             if row.status in ("FAILED_RETRYABLE", "FAILED_FINAL", "RUNNING", "PENDING"):
                 return row.step_index
-        return 0
+        return None
 
     def list_steps(self, task_id: UUID) -> list[dict]:
         rows = self.session.execute(

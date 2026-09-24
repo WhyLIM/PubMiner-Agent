@@ -210,7 +210,7 @@ class TestVerticalSlice:
             assert claims, "at least one candidate claim must exist"
             for row in claims:
                 assert row.status == ClaimStatus.CANDIDATE.value
-                stored = claim_repo.get(row.id)
+                assert claim_repo.get(row.id) is not None
                 evidences = claim_repo.get_evidence(row.id)
                 assert evidences, "no-evidence-no-claim violated"
                 for ev in evidences:
@@ -307,3 +307,26 @@ class TestRecovery:
             assert steps[0]["status"] == "SUCCEEDED"
             # 后续步骤只执行一次
             assert [s["index"] for s in steps].count(1) == 1
+
+
+class TestResumeNoOp:
+    def test_resume_on_completed_task_does_not_rerun(self, session_factory):
+        task_id = _build_workflow(session_factory, _fake_ports())
+        from pubminer.infrastructure.db.base import session_scope
+        from pubminer.infrastructure.db.repositories.claims import ClaimRepository
+        from pubminer.infrastructure.db.repositories.documents import DocumentRepository
+        from pubminer.infrastructure.db.repositories.entities import EntityRepository
+        from pubminer.infrastructure.db.repositories.workflow import TaskRepository
+
+        with session_scope(session_factory) as session:
+            steps_before = TaskRepository(session).list_steps(task_id)
+            workflow = MiningWorkflow(
+                _fake_ports(), document_repo_factory=DocumentRepository,
+                claim_repo_factory=ClaimRepository, entity_repo_factory=EntityRepository,
+                task_repo=TaskRepository(session),
+            )
+            workflow.resume(task_id)
+            steps_after = TaskRepository(session).list_steps(task_id)
+            task = TaskRepository(session).get(task_id)
+            assert task.status == TaskStatus.REVIEW_READY
+            assert steps_after == steps_before, "已完成任务的 resume 必须是空操作"

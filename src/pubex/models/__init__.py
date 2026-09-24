@@ -2,7 +2,6 @@
 from pubex.models.article import PubMedArticle, LEGACY_CSV_COLUMNS
 from pubex.models.document import (
     DocumentVersion,
-    FullTextDocument,
     LicenseRecord,
     Passage,
     content_hash,
@@ -22,6 +21,5 @@ __all__ = [
     "DocumentVersion",
     "Passage",
     "LicenseRecord",
-    "FullTextDocument",
     "content_hash",
 ]

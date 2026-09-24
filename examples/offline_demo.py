@@ -19,7 +19,7 @@ from sqlalchemy.pool import StaticPool
 from pubminer.domain.documents import Document, DocumentIdentifier, DocumentVersion, EvidenceSpan
 from pubminer.domain.evidence import BiomarkerEvidence, EvidencePolarity, Statistics, StudyDesign, VerificationResult
 from pubminer.domain.screening import ScreeningDecision, ScreeningLabel
-from pubminer.infrastructure.db.base import Base
+from pubminer.infrastructure.db.base import Base, session_scope
 from pubminer.infrastructure.db.repositories.claims import ClaimRepository
 from pubminer.infrastructure.db.repositories.documents import DocumentRepository
 from pubminer.infrastructure.db.repositories.entities import EntityRepository
@@ -104,7 +104,7 @@ def main() -> int:
     Base.metadata.create_all(bind=engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    with session_scope_like(factory) as session:
+    with session_scope(factory) as session:
         workflow = MiningWorkflow(
             build_fake_ports(),
             document_repo_factory=DocumentRepository,
@@ -135,24 +135,6 @@ def main() -> int:
                       f"@{ev.span.start_char}-{ev.span.end_char}: {ev.span.text}")
     print("\n✅ offline demo finished")
     return 0
-
-
-def session_scope_like(factory):
-    """极简事务边界（生产用 infrastructure.db.base.session_scope）。"""
-    class _Ctx:
-        def __enter__(self):
-            self.session = factory()
-            return self.session
-
-        def __exit__(self, *exc):
-            if exc[0] is None:
-                self.session.commit()
-            else:
-                self.session.rollback()
-            self.session.close()
-            return False
-    return _Ctx()
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

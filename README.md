@@ -82,6 +82,12 @@ cd webui && pnpm install && pnpm dev
 
 零配置离线跑通完整管线（检索→筛选→抽取→归一化→验证→聚合），打印任务步骤与带原文 span 的候选结论；真实适配器如何替换 fake 见 `examples/offline_demo.py` 文件头注释。`tests/test_examples.py` 守护该样例始终可运行。
 
+真实 key 配置好后，先用 LLM 握手探针验证供应商/协议/thinking 配置：
+
+```bash
+.venv/Scripts/python.exe scripts/smoke_llm.py   # 打印协商到的协议、模型、延迟、token
+```
+
 ## 测试
 
 ```bash

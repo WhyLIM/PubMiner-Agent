@@ -17,7 +17,6 @@ import pandas as pd
 
 from pubex.models.article import LEGACY_CSV_COLUMNS, PubMedArticle
 
-PUBMED_ARTICLE_TYPE = PubMedArticle
 _NA = "NA"
 
 
@@ -37,7 +36,7 @@ def _cell_to_value(raw: object) -> str | list[str]:
 
 
 def write_legacy_csv(
-    articles: list[PUBMED_ARTICLE_TYPE],
+    articles: list[PubMedArticle],
     fname: str | Path,
     *,
     overwrite_backup: bool = True,

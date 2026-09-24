@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sys
 
+from pubminer.application.ports import LLMRequest
 from pubminer.settings import load_env_file
 
 
@@ -27,7 +28,7 @@ def main() -> int:
     )
     gateway = LLMGateway(provider)
     response = gateway.generate(
-        __import__("pubminer.application.ports", fromlist=["LLMRequest"]).LLMRequest(
+        LLMRequest(
             purpose="smoke-ping",
             prompt_version="smoke@v1",
             system="You are a connectivity probe. Reply with exactly: PONG",

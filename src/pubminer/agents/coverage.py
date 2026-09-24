@@ -1,27 +1,8 @@
 """覆盖评估：从 evidence 统计更新 CoverageSnapshot 与边际收益判断。"""
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from pubminer.domain.agents import CoverageItem, CoverageSnapshot
 from pubminer.domain.evidence import Evidence, EvidencePolarity
-
-
-@dataclass
-class MarginalGain:
-    """边际收益启发式：新增证据相对已有证据的增量比例。"""
-
-    previous_total: int
-    current_total: int
-
-    @property
-    def ratio(self) -> float:
-        if self.previous_total <= 0:
-            return 1.0
-        return max(0.0, (self.current_total - self.previous_total) / self.previous_total)
-
-    def is_low(self, threshold: float = 0.05) -> bool:
-        return self.ratio < threshold
 
 
 class CoverageEvaluator:

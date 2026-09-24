@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from pubminer.domain.reviews import Review
+from pubminer.domain.reviews import Review, ReviewTarget
 from pubminer.infrastructure.db.orm_reviews import ReviewRow
 
 
@@ -44,7 +44,7 @@ class ReviewRepository:
     def _to_domain(row: ReviewRow) -> Review:
         return Review(
             id=row.id,
-            target=ReviewTargetWithFields(type=row.target_type, id=row.target_id),
+            target=ReviewTarget(type=row.target_type, id=row.target_id),
             decision=row.decision,
             reviewer_id=row.reviewer_id,
             before=row.before or {},
@@ -54,8 +54,3 @@ class ReviewRepository:
             created_at=row.created_at,
         )
 
-
-def ReviewTargetWithFields(type: str, id: UUID):  # noqa: N802 — 局部映射辅助
-    from pubminer.domain.reviews import ReviewTarget
-
-    return ReviewTarget(type=type, id=id)

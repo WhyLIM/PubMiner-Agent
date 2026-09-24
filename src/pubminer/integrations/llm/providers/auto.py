@@ -26,7 +26,6 @@ PROTOCOL_CLASSES: dict[str, type] = {
     "completions": OpenAICompatibleProvider,
 }
 PROTOCOL_PRIORITY = ("responses", "anthropic", "completions")
-PROTOCOL_PRIORITY_FALLBACK = PROTOCOL_PRIORITY
 
 
 class AutoProtocolProvider(LLMProvider):

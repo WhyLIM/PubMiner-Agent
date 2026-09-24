@@ -64,7 +64,7 @@ class LLMDecider:
         response = self.llm.structured_generate(
             LLMRequest(
                 purpose="agent-decide",
-                prompt_version=f"agent-policy@v1",
+                prompt_version="agent-policy@v1",
                 system=prompt.system,
                 user=user,
                 temperature=0.1,
