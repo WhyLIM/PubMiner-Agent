@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { DataAnalysis, Document, Bell, TrendCharts } from "@element-plus/icons-vue";
 import {
   agentApi,
   type AggregationItem,
@@ -40,7 +41,7 @@ const priorityCounts = computed(() => {
 // 图表颜色跟随明暗主题（useChart 对 option 深度监听，主题切换即重绘）
 const axisText = computed(() => (isDark.value ? "#8ea3c4" : "#8592a8"));
 const gridLine = computed(() => (isDark.value ? "rgba(142, 163, 196, 0.16)" : "rgba(133, 146, 168, 0.18)"));
-const barColor = computed(() => (isDark.value ? "#6b93ff" : "#3d6fed"));
+const barColor = computed(() => (isDark.value ? "#3ec2a8" : "#0e7f6e"));
 
 const polarityChartEl = ref<HTMLElement>();
 const polarityOption = computed(() => ({
@@ -75,7 +76,7 @@ const polarityOption = computed(() => ({
 useChart(polarityChartEl, () => polarityOption.value);
 
 const donutPalette = computed(() =>
-  isDark.value ? ["#e06c74", "#d9a44e", "#6e7d99"] : ["#cf5058", "#c98a2d", "#8592a8"],
+  isDark.value ? ["#e06c74", "#d9a44e", "#6f8177"] : ["#c4525a", "#c08a2d", "#7d8c84"],
 );
 
 const priorityChartEl = ref<HTMLElement>();
@@ -150,27 +151,47 @@ const statusTag = (status: string) =>
     <template v-else>
       <el-row :gutter="16">
         <el-col :span="6">
-          <el-card shadow="hover">
-            <div class="pm-stat-value">{{ aggregations.length }}</div>
-            <div class="pm-stat-label">结论聚类（含全部状态）</div>
+          <el-card shadow="hover" class="pm-stat-card">
+            <div class="stat-row">
+              <div>
+                <div class="pm-stat-value">{{ aggregations.length }}</div>
+                <div class="pm-stat-label">结论聚类（全部状态）</div>
+              </div>
+              <span class="pm-stat-icon"><el-icon><DataAnalysis /></el-icon></span>
+            </div>
           </el-card>
         </el-col>
         <el-col :span="6">
-          <el-card shadow="hover">
-            <div class="pm-stat-value">{{ claims.length }}</div>
-            <div class="pm-stat-label">CANDIDATE 结论</div>
+          <el-card shadow="hover" class="pm-stat-card">
+            <div class="stat-row">
+              <div>
+                <div class="pm-stat-value">{{ claims.length }}</div>
+                <div class="pm-stat-label">CANDIDATE 结论</div>
+              </div>
+              <span class="pm-stat-icon"><el-icon><Document /></el-icon></span>
+            </div>
           </el-card>
         </el-col>
         <el-col :span="6">
-          <el-card shadow="hover">
-            <div class="pm-stat-value">{{ polarityTotals.SUPPORT }}</div>
-            <div class="pm-stat-label">支持证据</div>
+          <el-card shadow="hover" class="pm-stat-card">
+            <div class="stat-row">
+              <div>
+                <div class="pm-stat-value">{{ polarityTotals.SUPPORT }}</div>
+                <div class="pm-stat-label">支持证据</div>
+              </div>
+              <span class="pm-stat-icon"><el-icon><TrendCharts /></el-icon></span>
+            </div>
           </el-card>
         </el-col>
         <el-col :span="6">
-          <el-card shadow="hover">
-            <div class="pm-stat-value">{{ queue.length }}</div>
-            <div class="pm-stat-label">待审核队列</div>
+          <el-card shadow="hover" class="pm-stat-card">
+            <div class="stat-row">
+              <div>
+                <div class="pm-stat-value">{{ queue.length }}</div>
+                <div class="pm-stat-label">待审核队列</div>
+              </div>
+              <span class="pm-stat-icon"><el-icon><Bell /></el-icon></span>
+            </div>
           </el-card>
         </el-col>
       </el-row>

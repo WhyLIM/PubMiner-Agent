@@ -1,74 +1,77 @@
 /* ============================================================
-   设计令牌：亮 / 暗双主题（单一 accent，中性底，禁止纯黑纯白）
-   圆角体系：容器 12px · 控件 8px · 小标签 6px（全站唯一样式规则）
+   设计令牌：精密仪器 / 临床青绿方向，亮暗双主题
+   单一 accent；中性底带绿灰相；禁止纯黑纯白
+   圆角体系：容器 14px · 控件 8px · 标签 6px
    ============================================================ */
 
 :root {
   /* 表面 */
-  --pm-bg: #f3f5f9;
+  --pm-bg: #f4f6f5;
   --pm-surface: #ffffff;
-  --pm-surface-2: #f7f9fc;
-  --pm-sidebar: #101c33;
+  --pm-surface-2: #eff3f1;
+  --pm-header: rgba(255, 255, 255, 0.82);
 
-  /* 文本（冷灰系，统一色相） */
-  --pm-text-1: #1c2740;
-  --pm-text-2: #55627a;
-  --pm-text-3: #8592a8;
+  /* 文本（绿灰系，统一色相） */
+  --pm-text-1: #16241f;
+  --pm-text-2: #4c5c55;
+  --pm-text-3: #7d8c84;
 
   /* 边框 */
-  --pm-border: #e4e9f2;
-  --pm-border-strong: #d4dbe8;
+  --pm-border: #e1e7e3;
+  --pm-border-strong: #ccd6d0;
 
-  /* 单一 accent（electric blue，去饱和） */
-  --pm-accent: #3d6fed;
-  --pm-accent-soft: rgba(61, 111, 237, 0.1);
+  /* 单一 accent：临床青绿 */
+  --pm-accent: #0e7f6e;
+  --pm-accent-hover: #0b6557;
+  --pm-accent-soft: rgba(14, 127, 110, 0.1);
 
   /* 状态色（低饱和） */
   --pm-ok: #2e9e6b;
-  --pm-warn: #c98a2d;
-  --pm-danger: #cf5058;
+  --pm-warn: #c08a2d;
+  --pm-danger: #c4525a;
 
-  /* 阴影：按背景色相着色，不用纯黑 */
-  --pm-shadow-sm: 0 1px 2px rgba(28, 39, 64, 0.05), 0 1px 6px rgba(28, 39, 64, 0.04);
-  --pm-shadow-md: 0 2px 6px rgba(28, 39, 64, 0.06), 0 10px 28px rgba(28, 39, 64, 0.07);
+  /* 阴影：按背景色相着色 */
+  --pm-shadow-sm: 0 1px 2px rgba(22, 36, 31, 0.05), 0 1px 5px rgba(22, 36, 31, 0.04);
+  --pm-shadow-md: 0 2px 8px rgba(22, 36, 31, 0.07), 0 12px 32px rgba(22, 36, 31, 0.08);
 
   /* 圆角 */
-  --radius-card: 12px;
+  --radius-card: 14px;
   --radius-control: 8px;
   --radius-tag: 6px;
 
-  /* 图表（供 ECharts 读取） */
-  --pm-chart-text: #8592a8;
-  --pm-chart-grid: rgba(133, 146, 168, 0.18);
+  /* 图表 */
+  --pm-chart-text: #7d8c84;
+  --pm-chart-grid: rgba(125, 140, 132, 0.18);
 
   color-scheme: light;
 }
 
 html.dark {
-  --pm-bg: #0f1420;
-  --pm-surface: #161d2e;
-  --pm-surface-2: #1b2337;
-  --pm-sidebar: #0c1220;
+  --pm-bg: #0c110f;
+  --pm-surface: #131a17;
+  --pm-surface-2: #1a231f;
+  --pm-header: rgba(12, 17, 15, 0.78);
 
-  --pm-text-1: #e2e8f4;
-  --pm-text-2: #9fabc2;
-  --pm-text-3: #6e7d99;
+  --pm-text-1: #e3eae6;
+  --pm-text-2: #a3b5ac;
+  --pm-text-3: #6f8177;
 
-  --pm-border: #242e45;
-  --pm-border-strong: #303c5a;
+  --pm-border: #233029;
+  --pm-border-strong: #2f4038;
 
-  --pm-accent: #6b93ff;
-  --pm-accent-soft: rgba(107, 147, 255, 0.14);
+  --pm-accent: #3ec2a8;
+  --pm-accent-hover: #5cd2bb;
+  --pm-accent-soft: rgba(62, 194, 168, 0.13);
 
   --pm-ok: #4cba8a;
   --pm-warn: #d9a44e;
   --pm-danger: #e06c74;
 
-  --pm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 6px rgba(0, 0, 0, 0.2);
-  --pm-shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.32);
+  --pm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28), 0 1px 5px rgba(0, 0, 0, 0.22);
+  --pm-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.32), 0 12px 32px rgba(0, 0, 0, 0.36);
 
-  --pm-chart-text: #8ea3c4;
-  --pm-chart-grid: rgba(142, 163, 196, 0.16);
+  --pm-chart-text: #8fa89d;
+  --pm-chart-grid: rgba(143, 168, 157, 0.15);
 
   color-scheme: dark;
 }

@@ -1,11 +1,27 @@
-/* PubMiner Evidence Agent 全局样式：消费 tokens.css 的设计令牌 */
+/* PubMiner Evidence Agent 全局样式：消费 tokens.css 设计令牌 */
 
 :root {
   --el-color-primary: var(--pm-accent);
+  --el-color-primary-light-3: #4a9c8e;
+  --el-color-primary-light-5: #7ab8ad;
+  --el-color-primary-light-7: #a9d4cc;
+  --el-color-primary-light-8: #c2e1db;
+  --el-color-primary-light-9: #e0efec;
+  --el-color-primary-dark-2: #0b6557;
   --el-border-radius-base: 8px;
   --el-border-radius-small: 6px;
   --el-font-family: "Outfit Variable", "PingFang SC", "Microsoft YaHei",
     system-ui, sans-serif;
+}
+
+html.dark {
+  --el-color-primary: var(--pm-accent);
+  --el-color-primary-light-3: #65d1bc;
+  --el-color-primary-light-5: #8adfd0;
+  --el-color-primary-light-7: #b2ece2;
+  --el-color-primary-light-8: #ccf3ec;
+  --el-color-primary-light-9: #e5f9f5;
+  --el-color-primary-dark-2: #37a893;
 }
 
 * {
@@ -35,38 +51,42 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* 布局 */
-.pm-layout {
-  height: 100vh;
-  display: flex;
+/* ============ 顶部导航布局 ============ */
+
+.pm-topnav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(14px);
+  background: var(--pm-header);
+  border-bottom: 1px solid var(--pm-border);
 }
 
-.pm-sidebar {
-  width: 224px;
-  flex-shrink: 0;
-  background: var(--pm-sidebar);
+.pm-topnav-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  height: 60px;
   display: flex;
-  flex-direction: column;
-  color: var(--pm-text-2);
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  align-items: center;
+  gap: 28px;
+  padding: 0 24px;
 }
 
-.pm-logo {
+.pm-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 18px 16px;
   font-size: 15px;
   font-weight: 600;
-  color: #f2f5fb;
+  color: var(--pm-text-1);
   letter-spacing: 0.2px;
 }
 
-.pm-logo .pi {
+.pm-brand .pi {
   width: 30px;
   height: 30px;
   border-radius: var(--radius-control);
-  background: linear-gradient(135deg, #4f6fe6, #7a5ce0);
+  background: var(--pm-accent);
   display: grid;
   place-items: center;
   font-family: serif;
@@ -74,26 +94,25 @@ body {
   font-size: 17px;
 }
 
-.pm-logo small {
+.pm-brand small {
   display: block;
   font-size: 11px;
   font-weight: 400;
-  color: #7686a8;
-  margin-top: 2px;
+  color: var(--pm-text-3);
+  margin-top: 1px;
 }
 
-.pm-menu {
-  padding: 6px 12px;
+.pm-nav {
   display: flex;
-  flex-direction: column;
   gap: 4px;
+  flex: 1;
 }
 
-.pm-menu a {
+.pm-nav a {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 8px 14px;
   border-radius: var(--radius-control);
   color: var(--pm-text-2);
   text-decoration: none;
@@ -102,40 +121,37 @@ body {
   transition: background 0.18s ease, color 0.18s ease;
 }
 
-.pm-menu a:hover {
-  background: rgba(255, 255, 255, 0.05);
+.pm-nav a:hover {
+  background: var(--pm-surface-2);
   color: var(--pm-text-1);
 }
 
-.pm-menu a.router-link-exact-active,
-.pm-menu a.router-link-active.active-on {
+.pm-nav a.router-link-exact-active,
+.pm-nav a.router-link-active.active-on {
   background: var(--pm-accent-soft);
-  color: #fff;
+  color: var(--pm-accent);
   font-weight: 600;
 }
 
-.pm-sidebar-footer {
-  margin-top: auto;
-  padding: 14px 18px 16px;
-  font-size: 11px;
-  color: var(--pm-text-3);
-  line-height: 1.7;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+.pm-nav-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
 }
 
+/* ============ 内容区 ============ */
+
 .pm-main {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 24px 28px 44px;
+  padding: 26px 24px 48px;
+}
+
+.pm-container {
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .pm-page-header {
-  max-width: 1440px;
-  margin: 0 auto 18px;
+  margin-bottom: 18px;
 }
 
 .pm-page-header h1 {
@@ -153,17 +169,18 @@ body {
 }
 
 .pm-content {
-  max-width: 1440px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
-/* 卡片：surface + 着色阴影，去掉默认边框三件套 */
+/* ============ 卡片：surface + 着色阴影，无默认边框 ============ */
+
 .pm-main .el-card {
   border-radius: var(--radius-card) !important;
   border: none !important;
   background: var(--pm-surface);
   box-shadow: var(--pm-shadow-sm) !important;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition: box-shadow 0.2s ease;
 }
 
 .pm-main .el-card:hover {
@@ -178,7 +195,27 @@ body {
   border-bottom: 1px solid var(--pm-border) !important;
 }
 
-/* 统计卡 */
+/* ============ 统计卡 ============ */
+
+.pm-stat-card .stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pm-stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  background: var(--pm-accent-soft);
+  color: var(--pm-accent);
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  flex-shrink: 0;
+}
+
 .pm-stat-value {
   font-size: 26px;
   font-weight: 700;
@@ -192,7 +229,8 @@ body {
   margin-top: 4px;
 }
 
-/* 表格融入 surface */
+/* ============ 表格融入 surface ============ */
+
 .pm-main .el-table {
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
@@ -201,7 +239,8 @@ body {
   color: var(--pm-text-1);
 }
 
-/* 交互反馈：按压下沉 + 全交互元素过渡 */
+/* ============ 交互反馈 ============ */
+
 .el-button {
   transition: transform 0.12s ease, background 0.18s ease, border-color 0.18s ease;
 }
@@ -210,14 +249,9 @@ body {
   transform: scale(0.98);
 }
 
-.pm-main a,
-.pm-menu a {
-  transition: background 0.18s ease, color 0.18s ease;
-}
-
 /* 高亮 span */
 .evidence-highlight {
-  background: rgba(201, 138, 45, 0.22);
+  background: rgba(192, 138, 45, 0.2);
   border-bottom: 2px solid var(--pm-warn);
   padding: 0 1px;
   border-radius: 3px;
@@ -230,8 +264,10 @@ body {
   word-break: break-word;
 }
 
-/* 标识符（等宽 + 数据数字） */
+/* 标识符 */
 .sig {
+  font-family: "JetBrains Mono Variable", Consolas, "SFMono-Regular", monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   background: var(--pm-surface-2);
   border: 1px solid var(--pm-border);
@@ -241,7 +277,7 @@ body {
   word-break: break-all;
 }
 
-/* 极性内联小统计（不用分隔符点） */
+/* 极性内联统计（无分隔符点） */
 .pm-mini-stats {
   display: inline-flex;
   gap: 10px;
@@ -271,13 +307,12 @@ body {
   background: transparent;
 }
 
-/* 焦点可见性（键盘可达性） */
+/* 焦点可见性 */
 :focus-visible {
   outline: 2px solid var(--pm-accent);
   outline-offset: 2px;
 }
 
-/* 平滑滚动 */
 html {
   scroll-behavior: smooth;
 }

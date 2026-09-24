@@ -12,16 +12,16 @@ const menu = [
 </script>
 
 <template>
-  <div class="pm-layout">
-    <aside class="pm-sidebar">
-      <div class="pm-logo">
+  <header class="pm-topnav">
+    <div class="pm-topnav-inner">
+      <div class="pm-brand">
         <span class="pi">Π</span>
         <span>
           PubMiner
           <small>Evidence Agent</small>
         </span>
       </div>
-      <nav class="pm-menu">
+      <nav class="pm-nav">
         <router-link
           v-for="item in menu"
           :key="item.path"
@@ -32,8 +32,7 @@ const menu = [
           {{ item.label }}
         </router-link>
       </nav>
-      <div class="pm-sidebar-footer">
-        <span>每条结论都钉在原文上</span>
+      <div class="pm-nav-actions">
         <el-button
           :icon="isDark ? Sunny : Moon"
           circle
@@ -44,9 +43,11 @@ const menu = [
           @click="toggleTheme"
         />
       </div>
-    </aside>
-    <main class="pm-main">
+    </div>
+  </header>
+  <main class="pm-main">
+    <div class="pm-container">
       <router-view />
-    </main>
-  </div>
+    </div>
+  </main>
 </template>
