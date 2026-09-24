@@ -260,3 +260,13 @@ class TestClaimEvidence:
         )
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+class TestCors:
+    def test_browser_origins_allowed(self, app_client):
+        response = app_client.options(
+            "/api/v1/health",
+            headers={"Origin": "http://localhost:3001",
+                     "Access-Control-Request-Method": "GET"},
+        )
+        assert response.headers.get("access-control-allow-origin") == "http://localhost:3001"

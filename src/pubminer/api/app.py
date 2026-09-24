@@ -5,6 +5,7 @@ import json
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from pubminer.infrastructure.db.base import session_scope
@@ -18,6 +19,19 @@ from pubminer.workflows.mining import WorkflowFatalError
 
 def create_app(container: Container) -> FastAPI:
     app = FastAPI(title="PubMiner Evidence Agent API", version="v1")
+
+    # webui 默认跑在 localhost:3000/3001；可用 PUBMINER_CORS_ORIGINS 覆盖
+    import os
+
+    origins = os.environ.get(
+        "PUBMINER_CORS_ORIGINS", "http://localhost:3000,http://localhost:3001"
+    ).split(",")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in origins if o.strip()],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # ------------------------------------------------------------ 错误模型 §10.2
 
