@@ -246,7 +246,7 @@ const statusTag = (status: string) =>
       <el-col :span="10">
         <el-card shadow="never">
           <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center">
+            <div class="card-header-row">
               <span>计划与行动</span>
               <div v-if="session" style="display: flex; gap: 8px">
                 <el-button size="small" :disabled="phase === 'running'" @click="submitAndApprovePlan">批准计划</el-button>
@@ -265,11 +265,11 @@ const statusTag = (status: string) =>
                 :name="plan.version"
               >
                 <template #title>
-                  <span style="font-weight: 600">计划 v{{ plan.version }}</span>
-                  <el-tag size="small" style="margin-left: 8px" :type="plan.approved_by_human ? 'success' : 'info'">
+                  <span class="plan-title">计划 v{{ plan.version }}</span>
+                  <el-tag size="small" class="plan-tag" :type="plan.approved_by_human ? 'success' : 'info'">
                     {{ plan.approved_by_human ? "已批准" : "待批准" }}
                   </el-tag>
-                  <span style="color: #8a97ad; font-size: 12px; margin-left: 8px">{{ plan.rationale }}</span>
+                  <span class="plan-rationale">{{ plan.rationale }}</span>
                 </template>
                 <el-tag
                   v-for="step in plan.steps" :key="step.id" size="small"
@@ -280,16 +280,16 @@ const statusTag = (status: string) =>
               </el-collapse-item>
             </el-collapse>
 
-            <p style="margin: 14px 0 6px; font-size: 13px; font-weight: 600">行动轨迹（真实 workflow 事件）</p>
-            <el-timeline style="max-height: 320px; overflow-y: auto; padding-left: 4px">
+            <p class="section-label">行动轨迹（真实 workflow 事件）</p>
+            <el-timeline class="event-timeline">
               <el-timeline-item
                 v-for="event in [...events].reverse()" :key="event.seq"
                 :type="event.status === 'succeeded' ? 'success' : event.status === 'failed' ? 'danger' : 'info'"
                 :timestamp="`#${event.seq} · turn ${event.turn}`"
               >
                 <b>{{ event.action_type }}</b>
-                <span v-if="event.tool_name" style="color: #8a97ad"> · {{ event.tool_name }}</span>
-                <div v-if="event.summary" style="color: #6b7a90; font-size: 12px">{{ event.summary }}</div>
+                <span class="event-tool">{{ event.tool_name }}</span>
+                <div class="event-summary">{{ event.summary }}</div>
               </el-timeline-item>
               <el-timeline-item v-if="events.length === 0" timestamp="等待行动…" type="info" />
             </el-timeline>
@@ -315,10 +315,11 @@ const statusTag = (status: string) =>
             <el-table-column>
               <template #default="{ row }">
                 <span class="sig">{{ row.canonical_signature }}</span>
-                <div style="margin-top: 4px; font-size: 12px; color: #6b7a90">
-                  支持 {{ row.polarities?.SUPPORT ?? 0 }} · 反对 {{ row.polarities?.CONTRADICT ?? 0 }} ·
-                  无效应 {{ row.polarities?.NO_EFFECT ?? 0 }}
-                  <el-tag v-if="row.polarities?.CONTRADICT" type="danger" size="small" style="margin-left: 4px">冲突</el-tag>
+                <div class="pm-mini-stats" style="margin-top: 4px">
+                  <span class="s-up">支持 {{ row.polarities?.SUPPORT ?? 0 }}</span>
+                  <span class="s-down">反对 {{ row.polarities?.CONTRADICT ?? 0 }}</span>
+                  <span class="s-flat">无效应 {{ row.polarities?.NO_EFFECT ?? 0 }}</span>
+                  <el-tag v-if="row.polarities?.CONTRADICT" type="danger" size="small">冲突</el-tag>
                 </div>
               </template>
             </el-table-column>
@@ -328,8 +329,8 @@ const statusTag = (status: string) =>
           <template v-if="spans.length">
             <el-divider style="margin: 12px 0" />
             <p style="margin: 0 0 8px; font-size: 13px; font-weight: 600">原文证据（固定 offset 定位）</p>
-            <el-card v-for="item in spans" :key="item.evidence_id" shadow="never" style="margin-bottom: 8px">
-              <p style="margin: 0 0 6px; font-size: 12px; color: #8a97ad">
+            <el-card v-for="item in spans" :key="item.evidence_id" shadow="never" class="evidence-card">
+              <p class="evidence-meta">
                 {{ item.document_title || "（无标题）" }} · {{ item.span.section_path }} ·
                 <el-tag size="small"
                         :type="item.polarity === 'SUPPORT' ? 'success' : item.polarity === 'CONTRADICT' ? 'danger' : 'info'">
@@ -350,6 +351,61 @@ const statusTag = (status: string) =>
 
 <style scoped>
 :deep(.selected-row) {
-  --el-table-tr-bg-color: #f0f5ff;
+  --el-table-tr-bg-color: var(--pm-accent-soft);
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.section-label {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pm-text-1);
+}
+
+.plan-title {
+  font-weight: 600;
+}
+
+.plan-tag {
+  margin-left: 8px;
+}
+
+.plan-rationale {
+  color: var(--pm-text-3);
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.event-timeline {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-left: 4px;
+}
+
+.event-tool {
+  color: var(--pm-text-3);
+}
+
+.event-summary {
+  color: var(--pm-text-2);
+  font-size: 12px;
+}
+
+.evidence-card {
+  margin-bottom: 8px;
+  background: var(--pm-surface-2) !important;
+}
+
+.evidence-meta {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--pm-text-3);
 }
 </style>

@@ -82,17 +82,53 @@ onMounted(loadQueue);
       <el-col :span="12">
         <el-card shadow="never">
           <template #header>原文与证据定位</template>
+
+<style scoped>
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-card {
+  margin-bottom: 10px;
+  background: var(--pm-surface-2) !important;
+}
+
+.queue-reason {
+  color: var(--pm-text-3);
+  font-size: 12px;
+}
+
+.evidence-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.evidence-stat {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-text-2);
+}
+
+.gate-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+</style>
           <el-empty v-if="!selected" description="从右侧选择一个待审结论" :image-size="72" />
           <el-empty v-else-if="spans.length === 0" description="该结论暂无已存储的 evidence span" :image-size="72" />
-          <el-card v-for="item in spans" :key="item.evidence_id" shadow="never"
-                   style="margin-bottom: 10px; background: #fbfcfe">
-            <p style="margin: 0 0 8px; font-size: 12px; color: #8a97ad">
+          <el-card v-for="item in spans" :key="item.evidence_id" shadow="never" class="evidence-card">
+            <p class="evidence-meta">
               {{ item.document_title || "（无标题）" }} · {{ item.span.section_path }} ·
               <el-tag size="small"
                       :type="item.polarity === 'SUPPORT' ? 'success' : item.polarity === 'CONTRADICT' ? 'danger' : 'info'">
                 {{ item.polarity }}
               </el-tag>
-              <span v-if="item.statistics?.effect_value" style="margin-left: 8px">
+              <span v-if="item.statistics?.effect_value" class="evidence-stat">
                 {{ item.statistics.effect_measure }} = {{ item.statistics.effect_value }}
               </span>
             </p>
@@ -108,44 +144,266 @@ onMounted(loadQueue);
       <el-col :span="12">
         <el-card shadow="never" style="margin-bottom: 16px">
           <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center">
+            <div class="card-header-row">
               <span>待审队列</span>
               <el-button text size="small" @click="loadQueue">刷新</el-button>
             </div>
           </template>
+
+<style scoped>
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-card {
+  margin-bottom: 10px;
+  background: var(--pm-surface-2) !important;
+}
+
+.queue-reason {
+  color: var(--pm-text-3);
+  font-size: 12px;
+}
+
+.evidence-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.evidence-stat {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-text-2);
+}
+
+.gate-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+</style>
           <el-table :data="queue" size="small" highlight-current-row style="cursor: pointer"
                     @row-click="openClaim">
             <el-table-column label="优先级" width="110">
               <template #default="{ row }">
                 <el-tag :type="priorityTag(row.priority)" size="small">{{ row.priority }}</el-tag>
               </template>
+
+<style scoped>
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-card {
+  margin-bottom: 10px;
+  background: var(--pm-surface-2) !important;
+}
+
+.queue-reason {
+  color: var(--pm-text-3);
+  font-size: 12px;
+}
+
+.evidence-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.evidence-stat {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-text-2);
+}
+
+.gate-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+</style>
             </el-table-column>
             <el-table-column label="结论" show-overflow-tooltip>
               <template #default="{ row }">
                 <span class="sig">{{ row.canonical_signature }}</span>
               </template>
+
+<style scoped>
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-card {
+  margin-bottom: 10px;
+  background: var(--pm-surface-2) !important;
+}
+
+.queue-reason {
+  color: var(--pm-text-3);
+  font-size: 12px;
+}
+
+.evidence-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.evidence-stat {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-text-2);
+}
+
+.gate-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+</style>
             </el-table-column>
             <el-table-column label="支持/反对/无效应" width="150">
               <template #default="{ row }">
                 {{ row.polarities?.SUPPORT ?? 0 }} / {{ row.polarities?.CONTRADICT ?? 0 }} /
                 {{ row.polarities?.NO_EFFECT ?? 0 }}
               </template>
+
+<style scoped>
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-card {
+  margin-bottom: 10px;
+  background: var(--pm-surface-2) !important;
+}
+
+.queue-reason {
+  color: var(--pm-text-3);
+  font-size: 12px;
+}
+
+.evidence-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.evidence-stat {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-text-2);
+}
+
+.gate-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+</style>
             </el-table-column>
             <el-table-column label="原因" show-overflow-tooltip>
               <template #default="{ row }">
-                <span style="color: #8a97ad; font-size: 12px">{{ row.reasons?.join("；") }}</span>
+                <span class="queue-reason">{{ row.reasons?.join("；") }}</span>
               </template>
+
+<style scoped>
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-card {
+  margin-bottom: 10px;
+  background: var(--pm-surface-2) !important;
+}
+
+.queue-reason {
+  color: var(--pm-text-3);
+  font-size: 12px;
+}
+
+.evidence-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.evidence-stat {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-text-2);
+}
+
+.gate-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+</style>
             </el-table-column>
           </el-table>
         </el-card>
 
         <el-card v-if="selected" shadow="never">
           <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center">
+            <div class="card-header-row">
               <span>结论核定</span>
               <span class="sig">{{ selected.canonical_signature }}</span>
             </div>
           </template>
+
+<style scoped>
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-card {
+  margin-bottom: 10px;
+  background: var(--pm-surface-2) !important;
+}
+
+.queue-reason {
+  color: var(--pm-text-3);
+  font-size: 12px;
+}
+
+.evidence-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.evidence-stat {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-text-2);
+}
+
+.gate-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+</style>
           <el-form label-width="90px" size="small">
             <el-form-item label="修订方向">
               <el-input v-model="revision" placeholder="HIGH / LOW / UNSPECIFIED（仅 Edit and Accept 使用）" />
@@ -161,7 +419,7 @@ onMounted(loadQueue);
             <el-button type="danger" plain :disabled="submitting" @click="submit('REJECT')">Reject</el-button>
             <el-button type="warning" plain :disabled="submitting" @click="submit('NEEDS_REVIEW')">Needs Review</el-button>
           </div>
-          <p style="margin: 10px 0 0; font-size: 12px; color: #a0a8b5">
+          <p class="gate-note">
             Agent 只能产生 CANDIDATE；APPROVED / PUBLISHED 需要更高角色权限（发布门禁）。
           </p>
         </el-card>
@@ -169,3 +427,40 @@ onMounted(loadQueue);
     </el-row>
   </div>
 </template>
+
+<style scoped>
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-card {
+  margin-bottom: 10px;
+  background: var(--pm-surface-2) !important;
+}
+
+.queue-reason {
+  color: var(--pm-text-3);
+  font-size: 12px;
+}
+
+.evidence-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.evidence-stat {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-text-2);
+}
+
+.gate-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+</style>

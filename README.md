@@ -18,7 +18,7 @@ D:\Study\Project\PubMiner Agent\
 ├── migrations/          # Alembic 0001–0006（可移植类型：生产 PG / 测试 SQLite）
 ├── tests/               # 统一测试套件（unit / contract / golden / architecture）
 ├── docs/adr/            # ADR-001～011
-├── webui/               # Vue 3 + Element Plus + ECharts 前端（总览 / · 工作台 /agent · 审核 /review）
+├── webui/               # Vue 3 + Element Plus + ECharts 前端，明暗双主题（总览 / · 工作台 /agent · 审核 /review）
 ├── alembic.ini · pytest.ini · pyproject.toml · .env.example
 └── PubMiner_生物医学证据Agent完整设计文档_v1.3.md   # 架构基线
 ```

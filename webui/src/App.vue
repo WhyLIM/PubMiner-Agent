@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from "vue-router";
-import { Odometer, ChatDotRound, Checked } from "@element-plus/icons-vue";
+import { Odometer, ChatDotRound, Checked, Moon, Sunny } from "@element-plus/icons-vue";
+import { isDark, toggleTheme } from "@/composables/useTheme";
 
 const route = useRoute();
 const menu = [
@@ -32,8 +33,16 @@ const menu = [
         </router-link>
       </nav>
       <div class="pm-sidebar-footer">
-        可信生物医学证据 Agent<br />
-        每条结论 · 钉在原文上
+        <span>每条结论都钉在原文上</span>
+        <el-button
+          :icon="isDark ? Sunny : Moon"
+          circle
+          size="small"
+          text
+          bg
+          aria-label="切换明暗主题"
+          @click="toggleTheme"
+        />
       </div>
     </aside>
     <main class="pm-main">
