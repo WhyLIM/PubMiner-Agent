@@ -12,6 +12,7 @@ from pubminer.infrastructure.db.base import session_scope
 
 from pubminer.api import schemas
 from pubminer.api.deps import Container
+from pubminer.application.ports import LLMError
 from pubminer.domain.tasks import TaskStatus
 from pubminer.workflows import MiningWorkflow, SearchIntent
 from pubminer.workflows.mining import WorkflowFatalError
@@ -516,6 +517,120 @@ def create_app(container: Container) -> FastAPI:
                 claim_status=claim.status.value,
                 claim_version=claim.version,
                 review_id=str(review.id),
+            )
+
+    @app.get("/api/v1/agent/sessions")
+    def list_sessions(limit: int = 20) -> schemas.SessionListResponse:
+        from sqlalchemy import select
+
+        from pubminer.infrastructure.db.orm_agents import AgentSessionRow
+
+        with session_scope(container.session_factory) as session:
+            rows = session.execute(
+                select(AgentSessionRow)
+                .order_by(AgentSessionRow.created_at.desc())
+                .limit(min(limit, 100))
+            ).scalars().all()
+            return schemas.SessionListResponse(
+                sessions=[
+                    schemas.SessionListItem(
+                        session_id=str(r.id),
+                        goal=r.goal,
+                        status=r.status,
+                        created_at=r.created_at.isoformat(),
+                    )
+                    for r in rows
+                ]
+            )
+
+    @app.post("/api/v1/agent/sessions/{session_id}/parse-goal")
+    def parse_goal(session_id: str) -> schemas.ParseGoalResponse:
+        """LLM 解析自然语言目标 → 绑定 TaskSpec（减少手填）。"""
+        if container.goal_parser is None:
+            raise HTTPException(503, "goal parser requires an LLM key (PUBMINER_LLM_API_KEY)")
+        sid = _parse_uuid(session_id, "session")
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            current = service.load_for_replay(sid)
+            try:
+                fields = container.goal_parser.parse(current.goal)
+            except LLMError as exc:
+                raise HTTPException(502, f"goal parse failed: {exc}")
+            spec = service.bind_task_spec(
+                sid, schemas.BindTaskSpecRequest(**fields), goal_text=current.goal
+            )
+            return schemas.ParseGoalResponse(
+                bound=True,
+                fields=fields,
+                missing_required_fields=spec.missing_required_fields(),
+            )
+
+    @app.post("/api/v1/agent/sessions/{session_id}/run", status_code=202)
+    def run_session(session_id: str, body: schemas.RunSessionRequest) -> schemas.RunSessionResponse:
+        """一键运行：绑定约束（可选）→ 生成并批准计划 → 启动挖掘管线。"""
+        from pubminer.domain.agents import Plan, PlanStep
+
+        if container.workflow_ports is None:
+            raise HTTPException(503, "workflow ports not configured")
+        sid = _parse_uuid(session_id, "session")
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            current = service.load_for_replay(sid)
+
+            if body.disease:
+                service.bind_task_spec(
+                    sid,
+                    schemas.BindTaskSpecRequest(
+                        disease=body.disease, task=body.task, year_from=body.year_from
+                    ),
+                    goal_text=current.goal,
+                )
+            elif current.task_spec is None:
+                raise HTTPException(
+                    422, "no TaskSpec bound; provide disease via request body or bind first"
+                )
+
+            plan = service.submit_plan(
+                sid,
+                Plan(
+                    version=current.current_plan_version + 1,
+                    rationale="auto: discovery search -> extract -> verify",
+                    steps=[
+                        PlanStep(id="s1", action_type="SEARCH"),
+                        PlanStep(id="s2", action_type="EXTRACT"),
+                    ],
+                ),
+            )
+            service.approve_plan(sid, plan.version)
+
+            disease = current.task_spec.disease if current.task_spec else body.disease
+            task_word = current.task_spec.task if current.task_spec else body.task
+            query = f"{disease or ''} {task_word or ''} biomarker".strip()
+            screen_criteria = body.screen_criteria or (
+                f"{disease or 'the target disease'} / {task_word or 'biomarker'} / "
+                "independent cohort validation preferred"
+            )
+
+            workflow = MiningWorkflow(
+                container.workflow_ports,
+                document_repo_factory=DocumentRepositoryOf,
+                claim_repo_factory=ClaimRepositoryOf,
+                entity_repo_factory=EntityRepositoryOf,
+                task_repo=container.task_repository(session),
+                pipeline_release=container.pipeline_release,
+            )
+            try:
+                task_id = workflow.start(
+                    session_id=sid,
+                    intents=[SearchIntent(name="discovery", query=query, max_results=body.max_results)],
+                    screen_criteria=screen_criteria,
+                )
+            except WorkflowFatalError as exc:
+                raise HTTPException(422, str(exc))
+            task = container.task_repository(session).get(task_id)
+            return schemas.RunSessionResponse(
+                task_id=str(task_id), status=task.status.value if task else "CREATED",
+                plan_version=plan.version,
             )
 
     return app

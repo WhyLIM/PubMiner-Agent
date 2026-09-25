@@ -274,3 +274,34 @@ class TaskListItem(BaseModel):
 
 class TaskListResponse(BaseModel):
     tasks: list[TaskListItem] = Field(default_factory=list)
+
+
+class SessionListItem(BaseModel):
+    session_id: str
+    goal: str
+    status: str
+    created_at: str
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[SessionListItem] = Field(default_factory=list)
+
+
+class ParseGoalResponse(BaseModel):
+    bound: bool
+    fields: dict[str, Any] = Field(default_factory=dict)
+    missing_required_fields: list[str] = Field(default_factory=list)
+
+
+class RunSessionRequest(BaseModel):
+    disease: str | None = None
+    task: str = "prognostic_biomarker"
+    year_from: int | None = None
+    max_results: int = Field(5, ge=1, le=100)
+    screen_criteria: str | None = None
+
+
+class RunSessionResponse(BaseModel):
+    task_id: str
+    status: str
+    plan_version: int

@@ -5,22 +5,36 @@ import {
   agentApi,
   AgentApiError,
   type ClaimItem,
+  type EvidenceSpanItem,
   type SessionResource,
 } from "@/api/client";
 import SpanHighlight from "@/components/SpanHighlight.vue";
 
+const SESSION_KEY = "pubminer-session-id";
+
 const goalDraft = ref("");
 const diseaseDraft = ref("");
 const answerDraft = ref("");
-const sessionId = ref<string | null>(null);
+const sessionId = ref<string | null>(localStorage.getItem(SESSION_KEY));
 const session = ref<SessionResource | null>(null);
-const phase = ref<"idle" | "creating" | "clarifying" | "planning" | "running" | "paused" | "completed" | "limited" | "failed">("idle");
+const phase = ref<"idle" | "working" | "clarifying" | "planning" | "running" | "paused" | "completed" | "limited" | "failed">(
+  sessionId.value ? "working" : "idle",
+);
 const events = ref<Array<{ seq: number; turn: number; action_type: string; tool_name: string | null; status: string; summary: string }>>([]);
 const claims = ref<ClaimItem[]>([]);
-const spans = ref<import("@/api/client").EvidenceSpanItem[]>([]);
+const spans = ref<EvidenceSpanItem[]>([]);
 const selectedClaim = ref<string | null>(null);
+const coverage = ref<{
+  support_count: number;
+  contradict_count: number;
+  no_effect_count: number;
+  independent_validation_found: boolean;
+  unresolved_gaps: string[];
+} | null>(null);
 const error = ref<string | null>(null);
-let eventCursor = 0;
+const lastTaskId = ref<string | null>(null);
+const recentSessions = ref<Array<{ session_id: string; goal: string; status: string }>>([]);
+const runStep = ref("");
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 function describe(err: unknown): string {
@@ -43,22 +57,23 @@ async function refreshSession() {
     session.value = await agentApi.getSession(sessionId.value);
     phase.value = phaseOf(session.value.status);
   } catch (err) {
-    error.value = describe(err);
+    if (err instanceof AgentApiError && err.status === 404) {
+      localStorage.removeItem(SESSION_KEY);
+      sessionId.value = null;
+      session.value = null;
+    } else {
+      error.value = describe(err);
+    }
   }
 }
 
 async function pollEvents() {
   if (!sessionId.value) return;
   try {
-    const { events: fresh } = await agentApi.fetchEvents(sessionId.value, eventCursor);
-    for (const e of fresh) {
-      if (e.seq > eventCursor) {
-        events.value.push(e);
-        eventCursor = e.seq;
-      }
-    }
+    const { events: fresh } = await agentApi.fetchEvents(sessionId.value, events.value.length);
+    for (const e of fresh) events.value.push(e);
   } catch {
-    /* 轮询失败静默重试 */
+    /* 静默重试 */
   }
 }
 
@@ -73,28 +88,159 @@ function stopEventLoop() {
   pollTimer = null;
 }
 
-onMounted(() => {
-  void agentApi.listClaims("CANDIDATE").then((r) => (claims.value = r.claims));
-});
-onBeforeUnmount(stopEventLoop);
-
-async function createSession() {
-  if (!goalDraft.value.trim()) return;
-  phase.value = "creating";
-  error.value = null;
+async function refreshClaims() {
   try {
+    claims.value = (await agentApi.listClaims("CANDIDATE")).claims;
+  } catch { /* 静默 */ }
+}
+
+async function refreshCoverage() {
+  if (!sessionId.value) return;
+  try {
+    coverage.value = await agentApi.getCoverage(sessionId.value);
+  } catch { /* 静默 */ }
+}
+
+async function loadRecentSessions() {
+  try {
+    recentSessions.value = (await agentApi.listSessions(10)).sessions;
+  } catch { /* 静默 */ }
+}
+
+function switchSession(id: string) {
+  sessionId.value = id;
+  localStorage.setItem(SESSION_KEY, id);
+  session.value = null;
+  events.value = [];
+  claims.value = [];
+  spans.value = [];
+  coverage.value = null;
+  phase.value = "working";
+  void refreshSession().then(() => {
+    phase.value = phaseOf(session.value?.status ?? "idle");
+    startEventLoop();
+  });
+}
+
+function newSession() {
+  stopEventLoop();
+  localStorage.removeItem(SESSION_KEY);
+  sessionId.value = null;
+  session.value = null;
+  events.value = [];
+  claims.value = [];
+  spans.value = [];
+  coverage.value = null;
+  lastTaskId.value = null;
+  selectedClaim.value = null;
+  phase.value = "idle";
+  error.value = null;
+}
+
+/** 一键研究：创建会话 → LLM 解析目标绑定约束 → 自动批准计划 → 执行检索 → 轮询完成。 */
+async function startResearch() {
+  if (!goalDraft.value.trim()) return;
+  error.value = null;
+  phase.value = "working";
+  const setStep = (s: string) => (runStep.value = s);
+  try {
+    setStep("创建会话");
     const created = await agentApi.createSession({ goal: goalDraft.value, user_id: "webui" });
     sessionId.value = created.session_id;
-    phase.value = "clarifying";
-    await refreshSession();
+    localStorage.setItem(SESSION_KEY, created.session_id);
     startEventLoop();
+
+    setStep("解析目标（LLM 绑定约束）");
+    let specFields: Record<string, unknown> = {};
+    try {
+      specFields = (await agentApi.parseGoal(created.session_id)).fields;
+    } catch (err) {
+      if (err instanceof AgentApiError && err.status === 503) {
+        throw new Error("未配置 LLM，无法自动解析目标；请在「手动控制」中填写约束");
+      }
+      throw err;
+    }
+    diseaseDraft.value = String(specFields.disease ?? "");
+
+    setStep("批准计划");
+    await refreshSession();
+    const plan = await agentApi.submitPlan(created.session_id, {
+      rationale: "auto: discovery search -> extract -> verify",
+      steps: [
+        { id: "s1", action_type: "SEARCH", description: "discovery search", status: "pending" },
+        { id: "s2", action_type: "EXTRACT", description: "biomarker extraction", status: "pending" },
+      ],
+    });
+    await agentApi.approvePlan(created.session_id, plan.plan_version);
+
+    setStep("检索与抽取");
+    const task = await agentApi.runSession(created.session_id, {
+      disease: (specFields.disease as string) ?? null,
+      task: (specFields.task as string) ?? "prognostic_biomarker",
+      year_from: (specFields.year_from as number) ?? null,
+      max_results: 5,
+    });
+    lastTaskId.value = task.task_id;
+
+    setStep("汇总证据");
+    const detail = await agentApi.getTask(task.task_id);
+    if (detail.status === "FAILED") {
+      throw new Error("任务失败：可点击「从失败步恢复」重试");
+    }
+    await Promise.all([refreshSession(), refreshClaims(), refreshCoverage()]);
+    phase.value = phaseOf(session.value?.status ?? "COMPLETED");
+    runStep.value = "";
+    ElMessage.success("研究完成，结论已生成");
   } catch (err) {
+    runStep.value = "";
     error.value = describe(err);
-    phase.value = "idle";
+    phase.value = "failed";
+    await refreshSession().catch(() => undefined);
   }
 }
 
-async function confirmTaskSpec() {
+async function resumeTask() {
+  if (!lastTaskId.value) return;
+  try {
+    phase.value = "running";
+    await agentApi.resumeTask(lastTaskId.value);
+    const detail = await agentApi.getTask(lastTaskId.value);
+    await Promise.all([refreshSession(), refreshClaims(), refreshCoverage()]);
+    if (detail.status === "FAILED") throw new Error("仍失败，请检查 LLM/网络配置");
+    ElMessage.success("恢复成功");
+  } catch (err) {
+    error.value = describe(err);
+  } finally {
+    await refreshSession();
+  }
+}
+
+async function openClaim(claim: ClaimItem) {
+  selectedClaim.value = claim.claim_id;
+  try {
+    spans.value = (await agentApi.getClaimEvidence(claim.claim_id)).evidence ?? [];
+  } catch (err) {
+    error.value = describe(err);
+  }
+}
+
+function claimRowClass({ row }: { row: ClaimItem }): string {
+  return row.claim_id === selectedClaim.value ? "selected-row" : "";
+}
+
+async function sendClarification() {
+  if (!sessionId.value || !answerDraft.value.trim()) return;
+  try {
+    await agentApi.postMessage(sessionId.value, {
+      role: "user", content: answerDraft.value, kind: "text", payload: {},
+    });
+    answerDraft.value = "";
+  } catch (err) {
+    error.value = describe(err);
+  }
+}
+
+async function bindManualSpec() {
   if (!sessionId.value || !diseaseDraft.value.trim()) return;
   try {
     await agentApi.bindTaskSpec(sessionId.value, {
@@ -108,56 +254,6 @@ async function confirmTaskSpec() {
   }
 }
 
-async function sendClarification() {
-  if (!sessionId.value || !answerDraft.value.trim()) return;
-  try {
-    await agentApi.postMessage(sessionId.value, { role: "user", content: answerDraft.value, kind: "text", payload: {} });
-    answerDraft.value = "";
-    ElMessage.success("已发送");
-  } catch (err) {
-    error.value = describe(err);
-  }
-}
-
-async function submitAndApprovePlan() {
-  if (!sessionId.value) return;
-  try {
-    const plan = await agentApi.submitPlan(sessionId.value, {
-      rationale: "广撒网检索 → 生存证据 → 独立验证",
-      steps: [
-        { id: "s1", action_type: "SEARCH", description: "broad discovery", status: "pending" },
-        { id: "s2", action_type: "EXTRACT", description: "biomarker extraction", status: "pending" },
-      ],
-    });
-    await agentApi.approvePlan(sessionId.value, plan.plan_version);
-    await refreshSession();
-    ElMessage.success(`计划 v${plan.plan_version} 已批准`);
-  } catch (err) {
-    error.value = describe(err);
-  }
-}
-
-async function runMiningTask() {
-  if (!sessionId.value) return;
-  phase.value = "running";
-  try {
-    const task = await agentApi.createTask({
-      session_id: sessionId.value,
-      intents: [{ name: "discovery", query: `${diseaseDraft.value || "pancreatic cancer"} prognostic biomarker`, max_results: 5 }],
-    });
-    const detail = await agentApi.getTask(task.task_id);
-    if (detail.status === "FAILED") {
-      error.value = "任务失败：可在总览页查看步骤详情后重试";
-    }
-    await Promise.all([refreshSession(), agentApi.listClaims("CANDIDATE").then((r) => (claims.value = r.claims))]);
-    if (detail.status !== "FAILED") ElMessage.success("任务完成，结论已就绪");
-  } catch (err) {
-    error.value = describe(err);
-  } finally {
-    await refreshSession();
-  }
-}
-
 async function pauseSession() {
   if (!sessionId.value) return;
   try {
@@ -168,25 +264,26 @@ async function pauseSession() {
   }
 }
 
-async function openClaim(claim: ClaimItem) {
-  selectedClaim.value = claim.claim_id;
-  try {
-    const evidence = await agentApi.getClaimEvidence(claim.claim_id);
-    spans.value = evidence.evidence ?? [];
-  } catch (err) {
-    error.value = describe(err);
+onMounted(async () => {
+  if (sessionId.value) {
+    await refreshSession();
+    if (session.value) {
+      phase.value = phaseOf(session.value.status);
+      startEventLoop();
+      void refreshClaims();
+    } else {
+      sessionId.value = null;
+      phase.value = "idle";
+    }
   }
-}
-
-function claimRowClass({ row }: { row: ClaimItem }): string {
-  return row.claim_id === selectedClaim.value ? "selected-row" : "";
-}
+  void loadRecentSessions();
+});
+onBeforeUnmount(stopEventLoop);
 
 const statusTag = (status: string) =>
   status === "COMPLETED" || status === "REVIEW_READY" ? "success"
   : status === "FAILED" ? "danger"
-  : status === "LIMITED" ? "warning"
-  : status === "WAITING_HUMAN" || status === "PAUSED" ? "warning"
+  : status === "LIMITED" || status === "WAITING_HUMAN" || status === "PAUSED" ? "warning"
   : "info";
 </script>
 
@@ -194,76 +291,124 @@ const statusTag = (status: string) =>
   <div>
     <div class="pm-page-header">
       <h1>Agent 工作台</h1>
-      <p>提出研究目标，Agent 澄清约束、制定计划并受控执行；每一步可追溯</p>
+      <p>一句话目标，Agent 自动完成 澄清 → 计划 → 检索 → 抽取 → 验证 → 结论</p>
     </div>
 
+    <!-- 一键研究 -->
+    <el-card shadow="never" class="start-card">
+      <el-input
+        v-model="goalDraft"
+        type="textarea"
+        :rows="3"
+        placeholder="输入研究目标，例如：寻找 2020 年以来胰腺癌预后 biomarker，并确认是否存在独立队列验证"
+      />
+      <div class="start-row">
+        <el-button
+          type="primary"
+          :disabled="phase !== 'idle' || !goalDraft.trim()"
+          @click="startResearch"
+        >
+          开始研究
+        </el-button>
+        <span v-if="runStep" class="run-step">{{ runStep }}…</span>
+        <el-button v-if="sessionId" size="small" text @click="newSession">新建会话</el-button>
+        <el-select
+          v-if="recentSessions.length"
+          v-model="sessionId"
+          size="small"
+          style="margin-left: auto; width: 280px"
+          placeholder="继续历史会话"
+          @change="(id: string) => switchSession(id)"
+        >
+          <el-option
+            v-for="s in recentSessions"
+            :key="s.session_id"
+            :label="`${s.goal.slice(0, 28)}（${s.status}）`"
+            :value="s.session_id"
+          />
+        </el-select>
+      </div>
+      <el-alert v-if="error" :title="error" type="error" :closable="false" style="margin-top: 10px" />
+      <div v-if="error && lastTaskId" style="margin-top: 8px">
+        <el-button size="small" type="warning" @click="resumeTask">从失败步恢复</el-button>
+      </div>
+    </el-card>
+
     <el-row :gutter="16">
-      <!-- 左：会话 -->
+      <!-- 左：会话状态 + 覆盖 -->
       <el-col :span="7">
         <el-card shadow="never">
-          <template #header>研究目标</template>
-          <el-input
-            v-model="goalDraft" type="textarea" :rows="4"
-            placeholder="例：寻找 2020 年以来胰腺癌预后 biomarker，并确认是否存在独立队列验证"
-          />
-          <el-button
-            style="width: 100%; margin-top: 10px" type="primary"
-            :disabled="phase !== 'idle' || !goalDraft.trim()" @click="createSession"
-          >
-            创建研究会话
-          </el-button>
-
-          <el-alert v-if="error" :title="error" type="error" :closable="false" style="margin-top: 10px" />
-
+          <template #header>
+            <div class="card-header-row">
+              <span>会话状态</span>
+              <el-tag v-if="session" :type="statusTag(session.status)" size="small">{{ session.status }}</el-tag>
+            </div>
+          </template>
           <template v-if="session">
-            <el-descriptions :column="1" size="small" style="margin-top: 14px">
-              <el-descriptions-item label="状态">
-                <el-tag :type="statusTag(session.status)" size="small">{{ session.status }}</el-tag>
+            <el-descriptions :column="1" size="small">
+              <el-descriptions-item label="目标">{{ session.goal }}</el-descriptions-item>
+              <el-descriptions-item v-if="session.task_spec" label="疾病">
+                {{ session.task_spec.disease }}
               </el-descriptions-item>
-              <el-descriptions-item label="轮次">{{ session.turn }}</el-descriptions-item>
               <el-descriptions-item v-if="session.stop_reason" label="停止原因">
                 {{ session.stop_reason.kind }} — {{ session.stop_reason.message }}
               </el-descriptions-item>
             </el-descriptions>
 
-            <el-divider style="margin: 12px 0" />
-            <p style="margin: 0 0 6px; font-size: 13px; font-weight: 600">澄清约束（疾病）</p>
-            <el-input v-model="diseaseDraft" placeholder="如 pancreatic cancer / PDAC" size="small" />
-            <el-button style="width: 100%; margin-top: 8px" size="small" :disabled="!diseaseDraft.trim()" @click="confirmTaskSpec">
-              绑定 TaskSpec
-            </el-button>
-
-            <p style="margin: 12px 0 6px; font-size: 13px; font-weight: 600">追问 / 补充</p>
-            <el-input v-model="answerDraft" type="textarea" :rows="2" size="small" />
-            <el-button style="width: 100%; margin-top: 8px" size="small" :disabled="!answerDraft.trim()" @click="sendClarification">
-              发送给 Agent
-            </el-button>
+            <el-collapse style="margin-top: 10px">
+              <el-collapse-item title="手动控制（高级）" name="manual">
+                <el-input v-model="diseaseDraft" size="small" placeholder="疾病（如 pancreatic cancer）" />
+                <el-button
+                  style="width: 100%; margin-top: 6px" size="small"
+                  :disabled="!diseaseDraft.trim()" @click="bindManualSpec"
+                >
+                  手动绑定 TaskSpec
+                </el-button>
+                <el-input v-model="answerDraft" type="textarea" :rows="2" size="small" style="margin-top: 10px" />
+                <el-button
+                  style="width: 100%; margin-top: 6px" size="small"
+                  :disabled="!answerDraft.trim()" @click="sendClarification"
+                >
+                  发送澄清说明
+                </el-button>
+                <el-button style="width: 100%; margin-top: 6px" size="small" @click="pauseSession">
+                  暂停会话
+                </el-button>
+              </el-collapse-item>
+            </el-collapse>
           </template>
+          <el-empty v-else description="尚无活动会话" :image-size="60" />
+        </el-card>
+
+        <el-card v-if="coverage" shadow="never" style="margin-top: 16px">
+          <template #header>覆盖矩阵</template>
+          <div class="pm-mini-stats" style="font-size: 13px">
+            <span class="s-up">支持 {{ coverage.support_count }}</span>
+            <span class="s-down">反对 {{ coverage.contradict_count }}</span>
+            <span class="s-flat">无效应 {{ coverage.no_effect_count }}</span>
+          </div>
+          <p style="margin: 8px 0 0; font-size: 12px; color: var(--pm-text-3)">
+            独立队列验证：
+            <el-tag size="small" :type="coverage.independent_validation_found ? 'success' : 'warning'">
+              {{ coverage.independent_validation_found ? "已发现" : "未发现" }}
+            </el-tag>
+          </p>
+          <ul
+            v-if="coverage.unresolved_gaps.length"
+            style="margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--pm-text-3)"
+          >
+            <li v-for="gap in coverage.unresolved_gaps" :key="gap">{{ gap }}</li>
+          </ul>
         </el-card>
       </el-col>
 
       <!-- 中：计划与行动 -->
       <el-col :span="10">
         <el-card shadow="never">
-          <template #header>
-            <div class="card-header-row">
-              <span>计划与行动</span>
-              <div v-if="session" style="display: flex; gap: 8px">
-                <el-button size="small" :disabled="phase === 'running'" @click="submitAndApprovePlan">批准计划</el-button>
-                <el-button size="small" type="primary" :disabled="phase !== 'planning'" @click="runMiningTask">
-                  执行检索任务
-                </el-button>
-                <el-button size="small" @click="pauseSession">暂停</el-button>
-              </div>
-            </div>
-          </template>
-
+          <template #header>计划与行动（真实 workflow 事件）</template>
           <template v-if="session">
             <el-collapse>
-              <el-collapse-item
-                v-for="plan in session.plans" :key="plan.version"
-                :name="plan.version"
-              >
+              <el-collapse-item v-for="plan in session.plans" :key="plan.version" :name="plan.version">
                 <template #title>
                   <span class="plan-title">计划 v{{ plan.version }}</span>
                   <el-tag size="small" class="plan-tag" :type="plan.approved_by_human ? 'success' : 'info'">
@@ -271,30 +416,28 @@ const statusTag = (status: string) =>
                   </el-tag>
                   <span class="plan-rationale">{{ plan.rationale }}</span>
                 </template>
-                <el-tag
-                  v-for="step in plan.steps" :key="step.id" size="small"
-                  style="margin-right: 6px"
-                >
+                <el-tag v-for="step in plan.steps" :key="step.id" size="small" style="margin-right: 6px">
                   {{ step.id }}: {{ step.action_type }}
                 </el-tag>
               </el-collapse-item>
             </el-collapse>
 
-            <p class="section-label">行动轨迹（真实 workflow 事件）</p>
+            <p class="section-label" style="margin-top: 14px">行动轨迹</p>
             <el-timeline class="event-timeline">
               <el-timeline-item
-                v-for="event in [...events].reverse()" :key="event.seq"
+                v-for="event in [...events].reverse()"
+                :key="event.seq"
                 :type="event.status === 'succeeded' ? 'success' : event.status === 'failed' ? 'danger' : 'info'"
                 :timestamp="`#${event.seq} · turn ${event.turn}`"
               >
                 <b>{{ event.action_type }}</b>
-                <span class="event-tool">{{ event.tool_name }}</span>
-                <div class="event-summary">{{ event.summary }}</div>
+                <span v-if="event.tool_name" class="event-tool">{{ event.tool_name }}</span>
+                <div v-if="event.summary" class="event-summary">{{ event.summary }}</div>
               </el-timeline-item>
               <el-timeline-item v-if="events.length === 0" timestamp="等待行动…" type="info" />
             </el-timeline>
           </template>
-          <el-empty v-else description="先在左侧创建研究会话" :image-size="72" />
+          <el-empty v-else description="开始研究后此处展示真实事件流" :image-size="72" />
         </el-card>
       </el-col>
 
@@ -302,16 +445,19 @@ const statusTag = (status: string) =>
       <el-col :span="7">
         <el-card shadow="never">
           <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center">
+            <div class="card-header-row">
               <span>Candidate Claims 与证据</span>
-              <el-button text size="small" @click="agentApi.listClaims('CANDIDATE').then((r) => (claims = r.claims))">
-                刷新
-              </el-button>
+              <el-button text size="small" @click="refreshClaims">刷新</el-button>
             </div>
           </template>
-          <el-table :data="claims" size="small" :show-header="false" style="cursor: pointer"
-                    @row-click="openClaim"
-                    :row-class-name="claimRowClass">
+          <el-table
+            :data="claims"
+            size="small"
+            :show-header="false"
+            style="cursor: pointer"
+            :row-class-name="claimRowClass"
+            @row-click="openClaim"
+          >
             <el-table-column>
               <template #default="{ row }">
                 <span class="sig">{{ row.canonical_signature }}</span>
@@ -324,22 +470,25 @@ const statusTag = (status: string) =>
               </template>
             </el-table-column>
           </el-table>
-          <el-empty v-if="claims.length === 0" description="暂无候选结论，先执行一次检索任务" :image-size="60" />
+          <el-empty v-if="claims.length === 0" description="尚无候选结论" :image-size="60" />
 
           <template v-if="spans.length">
             <el-divider style="margin: 12px 0" />
-            <p style="margin: 0 0 8px; font-size: 13px; font-weight: 600">原文证据（固定 offset 定位）</p>
+            <p class="section-label">原文证据（固定 offset 定位）</p>
             <el-card v-for="item in spans" :key="item.evidence_id" shadow="never" class="evidence-card">
               <p class="evidence-meta">
-                {{ item.document_title || "（无标题）" }} · {{ item.span.section_path }} ·
-                <el-tag size="small"
-                        :type="item.polarity === 'SUPPORT' ? 'success' : item.polarity === 'CONTRADICT' ? 'danger' : 'info'">
+                {{ item.document_title || "（无标题）" }} · {{ item.span.section_path }}
+                <el-tag
+                  size="small"
+                  :type="item.polarity === 'SUPPORT' ? 'success' : item.polarity === 'CONTRADICT' ? 'danger' : 'info'"
+                >
                   {{ item.polarity }}
                 </el-tag>
               </p>
               <SpanHighlight
                 :canonical-text="item.canonical_text ?? item.span.text"
-                :start-char="item.span.start_char" :end-char="item.span.end_char"
+                :start-char="item.span.start_char"
+                :end-char="item.span.end_char"
               />
             </el-card>
           </template>
@@ -350,8 +499,21 @@ const statusTag = (status: string) =>
 </template>
 
 <style scoped>
-:deep(.selected-row) {
-  --el-table-tr-bg-color: var(--pm-accent-soft);
+.start-card {
+  margin-bottom: 16px;
+}
+
+.start-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.run-step {
+  font-size: 13px;
+  color: var(--pm-accent);
+  font-weight: 500;
 }
 
 .card-header-row {
@@ -359,7 +521,6 @@ const statusTag = (status: string) =>
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .section-label {
@@ -407,5 +568,9 @@ const statusTag = (status: string) =>
   margin: 0 0 6px;
   font-size: 12px;
   color: var(--pm-text-3);
+}
+
+:deep(.selected-row) {
+  --el-table-tr-bg-color: var(--pm-accent-soft);
 }
 </style>

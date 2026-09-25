@@ -157,6 +157,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const agentApi = {
   health: () => request<{ status: string }>("/api/v1/health"),
 
+  listSessions: (limit = 20) =>
+    request<{
+      sessions: Array<{ session_id: string; goal: string; status: string; created_at: string }>;
+    }>(`/api/v1/agent/sessions?limit=${limit}`),
+
+  parseGoal: (sessionId: string) =>
+    request<{
+      bound: boolean;
+      fields: Record<string, unknown>;
+      missing_required_fields: string[];
+    }>(`/api/v1/agent/sessions/${sessionId}/parse-goal`, { method: "POST" }),
+
+  runSession: (sessionId: string, body: {
+    disease?: string | null;
+    task?: string;
+    year_from?: number | null;
+    max_results?: number;
+    screen_criteria?: string | null;
+  }) =>
+    request<{ task_id: string; status: string; plan_version: number }>(
+      `/api/v1/agent/sessions/${sessionId}/run`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  resumeTask: (taskId: string) =>
+    request<{ task_id: string; status: string }>(
+      `/api/v1/tasks/${taskId}/actions/resume`,
+      { method: "POST" },
+    ),
+
   createSession: (body: { goal: string; user_id?: string; limits?: Record<string, unknown> }) =>
     request<{ session_id: string; status: string; next: string }>("/api/v1/agent/sessions", {
       method: "POST",

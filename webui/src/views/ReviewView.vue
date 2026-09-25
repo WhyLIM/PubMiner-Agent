@@ -5,6 +5,9 @@ import { agentApi, type EvidenceSpanItem, type ReviewQueueItem } from "@/api/cli
 import SpanHighlight from "@/components/SpanHighlight.vue";
 
 const queue = ref<ReviewQueueItem[]>([]);
+const selectedRows = ref<ReviewQueueItem[]>([]);
+const batchReason = ref("");
+const batchRunning = ref(false);
 const selected = ref<ReviewQueueItem | null>(null);
 const spans = ref<EvidenceSpanItem[]>([]);
 const revision = ref("");
@@ -22,6 +25,35 @@ async function loadQueue() {
   } catch (err) {
     message.value = err instanceof Error ? err.message : String(err);
   }
+}
+
+async function batchSubmit(decision: "REJECT" | "NEEDS_REVIEW") {
+  if (!selectedRows.value.length) return;
+  if (!batchReason.value.trim()) {
+    message.value = "批量操作同样需要填写 reason";
+    return;
+  }
+  batchRunning.value = true;
+  let ok = 0;
+  let fail = 0;
+  for (const item of selectedRows.value) {
+    try {
+      await agentApi.submitReviewDecision({
+        claim_id: item.claim_id,
+        decision,
+        reviewer_id: "curator",
+        reason: batchReason.value,
+        expected_version: item.version,
+      });
+      ok += 1;
+    } catch {
+      fail += 1;
+    }
+  }
+  batchRunning.value = false;
+  message.value = `批量 ${decision}：成功 ${ok} 条${fail ? `，失败 ${fail} 条` : ""}`;
+  batchReason.value = "";
+  await loadQueue();
 }
 
 async function openClaim(item: ReviewQueueItem) {
@@ -125,10 +157,32 @@ onMounted(loadQueue);
         <el-card shadow="never" class="queue-card">
           <template #header>
             <div class="card-header-row">
-              <span>待审队列</span>
+              <span>待审队列（可多选批量操作）</span>
               <el-button text size="small" @click="loadQueue">刷新</el-button>
             </div>
           </template>
+          <div class="batch-bar">
+            <el-input
+              v-model="batchReason"
+              size="small"
+              placeholder="批量操作理由（必填）"
+              style="flex: 1; min-width: 200px"
+            />
+            <el-button
+              size="small" type="danger" plain
+              :disabled="!selectedRows.length || batchRunning"
+              @click="batchSubmit('REJECT')"
+            >
+              批量 Reject（{{ selectedRows.length }}）
+            </el-button>
+            <el-button
+              size="small" type="warning" plain
+              :disabled="!selectedRows.length || batchRunning"
+              @click="batchSubmit('NEEDS_REVIEW')"
+            >
+              批量 Needs Review（{{ selectedRows.length }}）
+            </el-button>
+          </div>
           <el-table
             :data="queue"
             size="small"
@@ -199,6 +253,14 @@ onMounted(loadQueue);
 </template>
 
 <style scoped>
+.batch-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
 .page-alert {
   margin-bottom: 14px;
 }

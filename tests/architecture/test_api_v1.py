@@ -270,3 +270,42 @@ class TestCors:
                      "Access-Control-Request-Method": "GET"},
         )
         assert response.headers.get("access-control-allow-origin") == "http://localhost:3001"
+
+
+class TestAutomationEndpoints:
+    """减少人工工作量：目标解析 + 一键运行 + 会话列表。"""
+
+    def test_sessions_list(self, app_client):
+        created = app_client.post("/api/v1/agent/sessions", json={"goal": "g1"})
+        assert created.status_code == 201
+        sessions = app_client.get("/api/v1/agent/sessions?limit=5").json()["sessions"]
+        assert any(s["goal"] == "g1" for s in sessions)
+
+    def test_parse_goal_binds_spec_without_llm_key(self, app_client):
+        # 容器未配 LLM 时 goal_parser 为 None → 503 而不是崩溃
+        created = app_client.post("/api/v1/agent/sessions", json={"goal": "g"})
+        sid = created.json()["session_id"]
+        response = app_client.post(f"/api/v1/agent/sessions/{sid}/parse-goal")
+        assert response.status_code == 503
+
+    def test_run_session_one_shot(self, app_client):
+        created = app_client.post("/api/v1/agent/sessions", json={"goal": "PDAC markers"})
+        sid = created.json()["session_id"]
+        run = app_client.post(
+            f"/api/v1/agent/sessions/{sid}/run",
+            json={"disease": "PDAC", "task": "prognostic_biomarker", "max_results": 3},
+        )
+        assert run.status_code == 202
+        detail = app_client.get(f"/api/v1/agent/sessions/{sid}").json()
+        assert detail["status"] == "PLANNED"
+        assert detail["plans"][-1]["approved_by_human"] is True
+        assert detail["task_spec"]["disease"] == "PDAC"
+
+    def test_run_without_disease_or_spec_rejected(self, app_client):
+        created = app_client.post("/api/v1/agent/sessions", json={"goal": "g"})
+        sid = created.json()["session_id"]
+        run = app_client.post(
+            f"/api/v1/agent/sessions/{sid}/run",
+            json={"intents_only": True},
+        )
+        assert run.status_code == 422

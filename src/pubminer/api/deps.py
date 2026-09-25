@@ -63,6 +63,7 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
 
         from pubminer.integrations.adapters import (
             EntrezGeneResolver,
+            GoalParseAdapter,
             LlmExtractPort,
             LlmScreenPort,
             LlmVerifyPort,
@@ -96,6 +97,7 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
                 lambda **kwargs: ToolResult(tool_name="bound", ok=True, summary="wired at assembly"),
             )
 
+        goal_parser = GoalParseAdapter(gateway, prompt_registry)
         ports = SimpleNamespace(
             search=PubexSearchAdapter(pubmed_client, loop),
             hydrate=PubexHydrateAdapter(pubmed_client, pmc_client, loop),
@@ -103,6 +105,7 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
             extract=LlmExtractPort(gateway, prompt_registry),
             normalize=EntrezGeneResolver(loop, email=email, api_key=api_key),
             verify=LlmVerifyPort(gateway, prompt_registry),
+            goal_parser=goal_parser,
         )
         notes.append(f"real ports wired: vendor={llm_vendor} model={llm_model} "
                      f"protocol={llm_protocol} thinking={llm_thinking}, NCBI as {email}")
@@ -118,6 +121,7 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
 class Container:
     session_factory: sessionmaker
     workflow_ports: Any = None  # MiningPorts；None 时任务创建返回 503
+    goal_parser: Any = None  # 目标解析适配器；None 时 parse-goal 返回 503
     pipeline_release: str = "mvp-0.1"
     request_counter: int = 0
     notes: list = field(default_factory=list)
