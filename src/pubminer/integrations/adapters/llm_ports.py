@@ -97,6 +97,7 @@ class LlmExtractPort:
 
         class _Item(BaseModel):
             biomarker_mention: str
+            biomarker_type: str | None = None
             disease_mention: str | None = None
             role: str
             direction: str | None = None
@@ -150,6 +151,7 @@ class LlmExtractPort:
                 results.append(
                     BiomarkerEvidence(
                         biomarker_mention=str(raw["biomarker_mention"]),
+                        biomarker_type=raw.get("biomarker_type"),
                         disease_mention=raw.get("disease_mention") or "",
                         role=str(raw.get("role", "prognostic")),
                         direction=raw.get("direction"),

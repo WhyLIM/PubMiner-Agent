@@ -70,6 +70,8 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
             PubexHydrateAdapter,
             PubexSearchAdapter,
         )
+        from pubminer.integrations.adapters.pubtator import PubTatorEntityResolver
+        from pubminer.integrations.adapters.resolver import CompositeEntityResolver
         from pubminer.integrations.llm import LLMGateway, PromptRegistry
         from pubminer.integrations.llm.providers import build_llm_provider
         from pubminer.integrations.loop_runner import LoopRunner
@@ -98,12 +100,15 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
             )
 
         goal_parser = GoalParseAdapter(gateway, prompt_registry)
+        gene_resolver = EntrezGeneResolver(loop, email=email, api_key=api_key)
+        pubtator_resolver = PubTatorEntityResolver(loop)
+        normalize = CompositeEntityResolver([gene_resolver, pubtator_resolver])
         ports = SimpleNamespace(
             search=PubexSearchAdapter(pubmed_client, loop),
             hydrate=PubexHydrateAdapter(pubmed_client, pmc_client, loop),
             screen=LlmScreenPort(gateway, prompt_registry),
             extract=LlmExtractPort(gateway, prompt_registry),
-            normalize=EntrezGeneResolver(loop, email=email, api_key=api_key),
+            normalize=normalize,
             verify=LlmVerifyPort(gateway, prompt_registry),
             goal_parser=goal_parser,
         )

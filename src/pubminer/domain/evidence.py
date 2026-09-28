@@ -131,6 +131,9 @@ class BiomarkerEvidence(BaseModel):
     """附录 A 契约：EXTRACT 步骤的 typed 输出（biomarker task family）。"""
 
     biomarker_mention: str
+    biomarker_type: str | None = Field(
+        None, description="gene | protein | clinical_marker | metabolite | other；驱动归一化路由"
+    )
     disease_mention: str
     role: str = Field(..., description="prognostic | diagnostic | predictive")
     direction: str | None = None

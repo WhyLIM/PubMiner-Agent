@@ -4,12 +4,11 @@ from __future__ import annotations
 import logging
 
 from pubminer.application.ports import LLMError, LLMRequest
-from pubminer.application.ports import LLMError as _LLMError
 
 logger = logging.getLogger("pubminer.adapters.goal_parse")
 
 
-class GoalParseError(_LLMError):
+class GoalParseError(LLMError):
     pass
 
 

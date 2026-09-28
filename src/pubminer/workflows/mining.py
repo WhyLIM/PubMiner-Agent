@@ -42,6 +42,25 @@ _ROLE_TO_PREDICATE = {
     "predictive": Predicate.PREDICTIVE,
 }
 
+_ENTITY_TYPE_BY_BIOMARKER = {
+    "GENE": EntityType.GENE,
+    "PROTEIN": EntityType.PROTEIN,
+    "DISEASE": EntityType.DISEASE,
+    "CLINICAL_MARKER": EntityType.OTHER,
+    "METABOLITE": EntityType.OTHER,
+    "OTHER": EntityType.OTHER,
+}
+
+_SOURCE_BY_NAMESPACE = {
+    "NCBIGene": IdentifierSource.NCBI_GENE_RESOLVER,
+    "MESH": IdentifierSource.MESH_RESOLVER,
+    "PUBTATOR": IdentifierSource.PUBTATOR,
+}
+
+
+def _source_for_namespace(namespace: str) -> IdentifierSource:
+    return _SOURCE_BY_NAMESPACE.get(namespace, IdentifierSource.PUBTATOR)
+
 
 class WorkflowStepError(RuntimeError):
     """可重试的步骤失败（来源瞬断、限流等）。"""
@@ -239,9 +258,10 @@ class MiningWorkflow:
         cache: dict[str, dict] = {}
         for extraction in state.get("extractions", []):
             mention = extraction["biomarker_mention"]
+            mention_type = (extraction.get("biomarker_type") or "GENE").upper()
             if mention not in cache:
                 try:
-                    candidates, needs_review = self.ports.normalize.resolve(mention, "GENE")
+                    candidates, needs_review = self.ports.normalize.resolve(mention, mention_type)
                 except Exception as exc:
                     raise WorkflowStepError(f"normalize failed for {mention}: {exc}") from exc
                 cache[mention] = {
@@ -369,12 +389,14 @@ class MiningWorkflow:
         identifier（如非基因类临床指标）——此时创建无 identifier 的占位
         实体并把证据标记 needs_review，绝不编造 identifier（ADR-006）。
         """
+        mention_type = (evidence.biomarker_type or "GENE").upper()
+        entity_type = _ENTITY_TYPE_BY_BIOMARKER.get(mention_type, EntityType.OTHER)
         if not resolution or not resolution.get("candidates"):
             placeholder = entity_repo.find_by_canonical_name(
-                evidence.biomarker_mention, entity_type=EntityType.GENE.value
+                evidence.biomarker_mention, entity_type=entity_type.value
             ) or entity_repo.create_entity(
                 Entity(
-                    type=EntityType.GENE,
+                    type=entity_type,
                     canonical_name=evidence.biomarker_mention,
                     ontology_version="mvp-2026",
                     aliases=[EntityAlias(alias=evidence.biomarker_mention, is_canonical=True)],
@@ -393,7 +415,7 @@ class MiningWorkflow:
             return existing, False
         return entity_repo.create_entity(
             Entity(
-                type=EntityType.GENE,
+                type=entity_type,
                 canonical_name=top.get("name") or evidence.biomarker_mention,
                 ontology_version=ontology_version,
                 aliases=[EntityAlias(alias=evidence.biomarker_mention)],
@@ -403,9 +425,7 @@ class MiningWorkflow:
                         namespace=namespace,
                         value=value,
                         ontology_version=ontology_version,
-                        source=IdentifierSource.PUBTATOR
-                        if namespace == "PUBTATOR"
-                        else IdentifierSource.NCBI_GENE_RESOLVER,
+                        source=_source_for_namespace(namespace),
                         score=top.get("score"),
                     )
                 ],
