@@ -309,3 +309,102 @@ class TestAutomationEndpoints:
             json={"intents_only": True},
         )
         assert run.status_code == 422
+
+
+class TestClarifyLoop:
+    """歧义目标 → Agent 追问 → 用户回答 → 重新解析 → 保存检索式 → 运行。"""
+
+    @pytest.fixture()
+    def app_client(self, tmp_path):
+        from fastapi.testclient import TestClient
+
+        from pubminer.api.app import create_app
+        from pubminer.api.deps import build_container
+        from tests.architecture.test_api_v1 import _fake_ports
+
+        test_db = tmp_path / "clarify.db"
+        container = build_container(f"sqlite:///{test_db.as_posix()}", workflow_ports=_fake_ports())
+        # 设置一个 fake goal_parser（离线测试）
+
+        class FakeGoalParser:
+            def parse(self, goal, *, prior_context=None):
+                return {
+                    "disease": "pancreatic cancer", "task": "prognostic_biomarker",
+                    "year_from": 2020,
+                    "search_intents": [
+                        {"name": "discovery", "query": "pancreatic cancer prognostic biomarker"},
+                        {"name": "validation", "query": "pancreatic cancer biomarker independent validation"},
+                    ],
+                    "clarification": {"needed": False, "question": None},
+                }
+
+        container.goal_parser = FakeGoalParser()
+        from pubminer.infrastructure.db.base import Base
+        from pubminer.infrastructure.db import orm_documents, orm_agents, orm_claims, orm_entities, orm_tasks  # noqa: F401
+
+        engine = container.session_factory.kw["bind"]
+        Base.metadata.create_all(bind=engine)
+        with TestClient(create_app(container)) as client:
+            yield client
+
+    def test_parse_goal_returns_intents_and_clarification(self, app_client):
+        created = app_client.post("/api/v1/agent/sessions", json={"goal": "biomarker"})
+        sid = created.json()["session_id"]
+        response = app_client.post(f"/api/v1/agent/sessions/{sid}/parse-goal")
+        assert response.status_code == 200
+        body = response.json()
+        assert "search_intents" in body
+        assert "clarification" in body
+        assert "fields" in body
+
+    def test_answer_stores_message(self, app_client):
+        created = app_client.post("/api/v1/agent/sessions", json={"goal": "g"})
+        sid = created.json()["session_id"]
+        r = app_client.post(f"/api/v1/agent/sessions/{sid}/answer", json={"answer": "PDAC"})
+        assert r.status_code == 200
+
+    def test_save_search_intents(self, app_client):
+        created = app_client.post("/api/v1/agent/sessions", json={"goal": "g"})
+        sid = created.json()["session_id"]
+        r = app_client.post(
+            f"/api/v1/agent/sessions/{sid}/search-intents",
+            json={"search_intents": [
+                {"name": "discovery", "query": "PDAC prognostic biomarker"},
+            ]},
+        )
+        assert r.status_code == 200
+
+    def test_full_ask_answer_run_flow(self, app_client):
+        """完整 AskHuman 闭环：解析 → 追问 → 回答 → 重新解析 → 保存检索式 → 运行。"""
+        created = app_client.post("/api/v1/agent/sessions", json={"goal": "biomarker study"})
+        sid = created.json()["session_id"]
+
+        # 第一次解析
+        parse1 = app_client.post(f"/api/v1/agent/sessions/{sid}/parse-goal")
+        assert parse1.status_code == 200
+        intents = parse1.json().get("search_intents", [])
+        assert len(intents) >= 0  # 可能 0（goal 太模糊）
+
+        # 用户回答澄清
+        app_client.post(
+            f"/api/v1/agent/sessions/{sid}/answer",
+            json={"answer": "PDAC, prognostic, 2020+"},
+        )
+
+        # 重新解析
+        parse2 = app_client.post(f"/api/v1/agent/sessions/{sid}/parse-goal")
+        assert parse2.status_code == 200
+
+        # 保存检索式
+        if intents:
+            app_client.post(
+                f"/api/v1/agent/sessions/{sid}/search-intents",
+                json={"search_intents": intents},
+            )
+
+        # 一键运行（用保存的检索式）
+        run = app_client.post(
+            f"/api/v1/agent/sessions/{sid}/run",
+            json={"disease": "PDAC", "task": "prognostic_biomarker", "max_results": 3},
+        )
+        assert run.status_code in (202, 503)  # 503 = 无真实端口

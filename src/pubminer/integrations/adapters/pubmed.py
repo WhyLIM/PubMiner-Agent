@@ -80,7 +80,6 @@ class PubexHydrateAdapter:
         return self._build_hydrated(records[0], pmid)
 
     def _build_hydrated(self, record, pmid: str) -> HydratedDocument:
-        from datetime import datetime, timezone
 
         identifiers = [DocumentIdentifier(kind="pmid", value=record.pmid)]
         if record.pmcid:
@@ -139,64 +138,7 @@ class PubexHydrateAdapter:
             offset = start + len(text) + 2
             spans.append((path, start, start + len(text)))
         return spans
-        records = self.loop.run(self.metadata_client.fetch_batch([pmid], batch_size=1))
-        if not records:
-            logger.warning("no metadata for %s", pmid)
-            return None
-        record = records[0]
 
-        identifiers = [DocumentIdentifier(kind="pmid", value=record.pmid)]
-        if record.pmcid:
-            identifiers.append(DocumentIdentifier(kind="pmcid", value=record.pmcid))
-        if record.doi:
-            identifiers.append(DocumentIdentifier(kind="doi", value=record.doi))
-
-        document = Document(
-            identifiers=identifiers,
-            title=record.title or "",
-            journal=record.journal,
-            year=record.year,
-            authors=list(record.authors),
-            abstract=record.abstract or "",
-        )
-
-        fulltext = self._try_pmc_fulltext(record) if self.include_fulltext else None
-        if fulltext is not None:
-            pubex_version, license_name = fulltext
-            domain_version = DocumentVersion(
-                document_id=document.id,
-                title=document.title,
-                canonical_text=pubex_version.canonical_text,
-                license=license_name,
-                source="pmc-oa",
-                retrieved_at=datetime.now(timezone.utc),
-            )
-            spans = [
-                (p.section_path, p.start_char, p.end_char)
-                for p in pubex_version.passages
-            ]
-            return HydratedDocument(
-                document=document,
-                version=domain_version,
-                section_spans=spans,
-                fulltext_available=True,
-            )
-
-        sections = _abstract_sections(document.title, document.abstract)
-        version = DocumentVersion(
-            document_id=document.id,
-            title=document.title,
-            canonical_text="\n\n".join(text for _, text in sections),
-            source="pubmed-abstract",
-            retrieved_at=datetime.now(timezone.utc),
-        )
-        spans = _spans_for_sections(version.canonical_text, sections)
-        return HydratedDocument(
-            document=document,
-            version=version,
-            section_spans=spans,
-            fulltext_available=False,
-        )
 
     def _try_pmc_fulltext(self, record) -> tuple[Any, str | None] | None:
         if not record.pmcid or self.pmc_client is None:

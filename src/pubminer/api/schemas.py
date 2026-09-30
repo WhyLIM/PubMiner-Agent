@@ -287,12 +287,6 @@ class SessionListResponse(BaseModel):
     sessions: list[SessionListItem] = Field(default_factory=list)
 
 
-class ParseGoalResponse(BaseModel):
-    bound: bool
-    fields: dict[str, Any] = Field(default_factory=dict)
-    missing_required_fields: list[str] = Field(default_factory=list)
-
-
 class RunSessionRequest(BaseModel):
     disease: str | None = None
     task: str = "prognostic_biomarker"
@@ -305,3 +299,24 @@ class RunSessionResponse(BaseModel):
     task_id: str
     status: str
     plan_version: int
+
+
+class SearchIntentItem(BaseModel):
+    name: str
+    query: str
+
+
+class ParseGoalResponse(BaseModel):
+    bound: bool = False
+    fields: dict[str, Any] = Field(default_factory=dict)
+    search_intents: list[SearchIntentItem] = Field(default_factory=list)
+    clarification: dict[str, Any] = Field(default_factory=dict)
+    missing_required_fields: list[str] = Field(default_factory=list)
+
+
+class AnswerRequest(BaseModel):
+    answer: str = Field(min_length=1, description="用户对澄清问题的回答")
+
+
+class SaveSearchIntentsRequest(BaseModel):
+    search_intents: list[SearchIntentItem] = Field(min_length=1)

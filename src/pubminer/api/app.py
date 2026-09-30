@@ -13,6 +13,7 @@ from pubminer.infrastructure.db.base import session_scope
 from pubminer.api import schemas
 from pubminer.api.deps import Container
 from pubminer.application.ports import LLMError
+from pubminer.infrastructure.db.orm_agents import AgentMessageRow as AgentMessageRow_
 from pubminer.domain.tasks import TaskStatus
 from pubminer.workflows import MiningWorkflow, SearchIntent
 from pubminer.workflows.mining import WorkflowFatalError
@@ -545,25 +546,73 @@ def create_app(container: Container) -> FastAPI:
 
     @app.post("/api/v1/agent/sessions/{session_id}/parse-goal")
     def parse_goal(session_id: str) -> schemas.ParseGoalResponse:
-        """LLM 解析自然语言目标 → 绑定 TaskSpec（减少手填）。"""
+        """LLM 解析自然语言目标：提取字段 + 生成检索式 + 歧义检测。"""
         if container.goal_parser is None:
             raise HTTPException(503, "goal parser requires an LLM key (PUBMINER_LLM_API_KEY)")
         sid = _parse_uuid(session_id, "session")
         with session_scope(container.session_factory) as session:
             service = container.session_service(session)
             current = service.load_for_replay(sid)
+
+            # 收集先验上下文（此前的澄清问答）
+            prior = "\n".join(
+                f"Q: {m.content}" if m.role == "agent" else f"A: {m.content}"
+                for m in session.query(AgentMessageRow_)
+                .filter(AgentMessageRow_.session_id == sid)
+                .order_by(AgentMessageRow_.created_at)
+                .all()
+            ) or None
+
             try:
-                fields = container.goal_parser.parse(current.goal)
+                result = container.goal_parser.parse(current.goal, prior_context=prior)
             except LLMError as exc:
                 raise HTTPException(502, f"goal parse failed: {exc}")
-            spec = service.bind_task_spec(
-                sid, schemas.BindTaskSpecRequest(**fields), goal_text=current.goal
-            )
+
+            # 绑定 TaskSpec 字段
+            spec_fields = {k: v for k, v in result.items()
+                           if k in ("disease", "task", "year_from", "year_to", "validation_requirement")}
+            spec = service.bind_task_spec(sid, schemas.BindTaskSpecRequest(**spec_fields), goal_text=current.goal)
+
+            # 存储检索式
+            intents = result.get("search_intents", [])
+            if intents:
+                service.post_message(sid, "agent", json.dumps(intents), kind="search_intents")
+
+            clarification = result.get("clarification", {})
+            needs_clarification = clarification.get("needed", False)
+            if needs_clarification and clarification.get("question"):
+                service.post_message(sid, "agent", clarification["question"], kind="clarification")
+
             return schemas.ParseGoalResponse(
-                bound=True,
-                fields=fields,
-                missing_required_fields=spec.missing_required_fields(),
+                bound=bool(spec_fields),
+                fields=spec_fields,
+                search_intents=[schemas.SearchIntentItem(**si) for si in intents],
+                clarification=clarification,
+                missing_required_fields=spec.missing_required_fields() if spec else [],
             )
+
+    @app.post("/api/v1/agent/sessions/{session_id}/answer")
+    def answer_clarification(session_id: str, body: schemas.AnswerRequest):
+        """用户回答澄清问题：存储回答。前端收到 200 后重新调 parse-goal。"""
+        sid = _parse_uuid(session_id, "session")
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            service.post_message(sid, "user", body.answer, kind="clarification_answer")
+            # 触发前端重新调 parse-goal（后端只存消息）
+            return {"ok": True, "hint": "call parse-goal again to re-parse with new context"}
+
+    @app.post("/api/v1/agent/sessions/{session_id}/search-intents")
+    def save_search_intents(session_id: str, body: schemas.SaveSearchIntentsRequest):
+        """保存最终检索式（用户确认或编辑后）。"""
+        sid = _parse_uuid(session_id, "session")
+        with session_scope(container.session_factory) as session:
+            service = container.session_service(session)
+            service.post_message(
+                sid, "user",
+                json.dumps([si.model_dump() for si in body.search_intents]),
+                kind="search_intents_final",
+            )
+            return {"ok": True, "count": len(body.search_intents)}
 
     @app.post("/api/v1/agent/sessions/{session_id}/run", status_code=202)
     def run_session(session_id: str, body: schemas.RunSessionRequest) -> schemas.RunSessionResponse:
