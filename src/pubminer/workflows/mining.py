@@ -29,10 +29,17 @@ _STEP_SEQUENCE = ["SEARCH", "HYDRATE", "SCREEN", "EXTRACT", "NORMALIZE", "VERIFY
 _STATUS_BY_STEP = {
     "SEARCH": TaskStatus.SEARCHING,
     "HYDRATE": TaskStatus.SEARCHING,
+    "HYDRATE2": TaskStatus.SEARCHING,
     "SCREEN": TaskStatus.SCREENING,
+    "SCREEN2": TaskStatus.SCREENING,
     "EXTRACT": TaskStatus.EXTRACTING,
+    "EXTRACT2": TaskStatus.EXTRACTING,
     "NORMALIZE": TaskStatus.NORMALIZING,
+    "NORMALIZE2": TaskStatus.NORMALIZING,
     "VERIFY": TaskStatus.VERIFYING,
+    "VERIFY2": TaskStatus.VERIFYING,
+    "COVERAGE": TaskStatus.VERIFYING,
+    "EXPAND": TaskStatus.SEARCHING,
     "AGGREGATE": TaskStatus.REVIEW_READY,
 }
 
@@ -75,7 +82,15 @@ class WorkflowFatalError(RuntimeError):
 
 
 class MiningWorkflow:
-    """对一篇查询的最小竖切：意图 → grounded candidate claims。"""
+    """对一篇查询的竖切：意图 → 迭代扩展 → grounded candidate claims。
+
+    支持覆盖驱动的迭代扩展：VERIFY 之后评估覆盖缺口（如独立验证未发现），
+    满足条件时经引文扩展（相关文献的 cited-by/参考文献）拉入第二波文献，
+    重复 水合→筛选→抽取→验证，再统一聚合。
+    """
+
+    BASE_STEPS = ["SEARCH", "HYDRATE", "SCREEN", "EXTRACT", "NORMALIZE", "VERIFY"]
+    EXPANSION_STEPS = ["COVERAGE", "EXPAND", "HYDRATE2", "SCREEN2", "EXTRACT2", "NORMALIZE2", "VERIFY2"]
 
     def __init__(
         self,
@@ -99,6 +114,13 @@ class MiningWorkflow:
         self.pipeline_release = pipeline_release
         self.max_step_attempts = max_step_attempts
 
+    def _sequence(self, task: Task) -> list[str]:
+        steps = list(self.BASE_STEPS)
+        if task.request.get("citation_expansion", True) and getattr(self.ports, "citations", None):
+            steps += self.EXPANSION_STEPS
+        steps.append("AGGREGATE")
+        return steps
+
     # ------------------------------------------------------------------ entry
 
     def start(
@@ -108,8 +130,10 @@ class MiningWorkflow:
         intents: list[SearchIntent],
         task_id: UUID | None = None,
         screen_criteria: str | None = None,
+        citation_expansion: bool = True,
     ) -> UUID:
         """创建任务并立即执行；返回 task_id。"""
+        task_citation_expansion = citation_expansion and getattr(self.ports, "citations", None) is not None
         task = Task(
             id=task_id or uuid4(),
             session_id=session_id,
@@ -117,6 +141,7 @@ class MiningWorkflow:
             request={
                 "intents": [i.__dict__ for i in intents],
                 "screen_criteria": screen_criteria,
+                "citation_expansion": task_citation_expansion,
             },
         )
         self.task_repo.create(task)
@@ -136,7 +161,8 @@ class MiningWorkflow:
 
     def _execute(self, task: Task, *, resume_from: int) -> UUID:
         state: dict = {}
-        for index, step_name in enumerate(_STEP_SEQUENCE):
+        sequence = self._sequence(task)
+        for index, step_name in enumerate(sequence):
             if index < resume_from:
                 output = self.task_repo.step_output(task.id, index)
                 if output is not None:
@@ -144,7 +170,7 @@ class MiningWorkflow:
                 continue
 
             self.task_repo.set_step(task.id, index, step_name, "RUNNING")
-            self.task_repo.update_status(task.id, _STATUS_BY_STEP[step_name])
+            self.task_repo.update_status(task.id, _STATUS_BY_STEP.get(step_name, _STATUS_BY_STEP["AGGREGATE"]))
             try:
                 output = self._run_step(step_name, state, task)
             except WorkflowFatalError as exc:
@@ -273,8 +299,12 @@ class MiningWorkflow:
         return {"resolutions": resolutions}
 
     def _step_verify(self, state: dict, task: Task) -> dict:
-        verified: list[dict] = []
+        verified: list[dict] = list(state.get("verified", []))
+        done = {v["biomarker_mention"] for v in verified}
         for extraction in state.get("extractions", []):
+            mention = extraction["biomarker_mention"]
+            if mention in done:
+                continue
             evidence = _extraction_model(extraction)
             signature = _provisional_signature(evidence, state)
             try:
@@ -291,6 +321,149 @@ class MiningWorkflow:
                     "reasons": result.reasons,
                 }
             )
+        return {"verified": verified}
+
+    def _step_coverage(self, state: dict, task: Task) -> dict:
+        """覆盖门控：独立验证未发现且有相关文献时触发引文扩展。"""
+        if not getattr(self.ports, "citations", None):
+            return {"expand": False}
+        relevant_pmids = [item["pmid"] for item in state.get("hydrated", []) if self._pmid_relevant(state, item["pmid"])]
+        if not relevant_pmids:
+            return {"expand": False}
+        iv_found = any(v.get("independent_validation") for v in state.get("verified", []))
+        return {"expand": not iv_found, "candidate_pmids": relevant_pmids}
+
+    def _pmid_relevant(self, state: dict, pmid: str) -> bool:
+        for decision in state.get("decisions", []):
+            for item in state.get("hydrated", []):
+                if item["document"]["id"] == decision["document_id"] and item["pmid"] == pmid:
+                    if decision["label"] in (ScreeningLabel.RELEVANT.value, ScreeningLabel.UNCERTAIN.value):
+                        return True
+        return False
+
+    def _step_expand(self, state: dict, task: Task) -> dict:
+        """引文扩展：相关文献的 cited-by + references 中未见过的新 PMID。"""
+        if not state.get("expand"):
+            return {}
+        candidate_pmids = state.get("candidate_pmids", [])
+        seen = set(state.get("pmids", []))
+        try:
+            citation_map = self.ports.citations.fetch_citations(candidate_pmids)
+        except Exception as exc:
+            raise WorkflowStepError(f"citation fetch failed: {exc}") from exc
+
+        new_pmids: list[str] = []
+        for pmid in candidate_pmids:
+            entry = citation_map.get(pmid)
+            linked: list[str] = []
+            if entry is not None:
+                linked = [str(x) for x in (getattr(entry, "cited_by", []) or [])]
+                linked += [str(x) for x in (getattr(entry, "references", []) or [])]
+            for ref in linked:
+                ref = ref.strip()
+                if ref and ref not in seen and ref not in new_pmids:
+                    new_pmids.append(ref)
+        new_pmids = new_pmids[:10]  # 扩展上限：控制成本
+        return {
+            "pmids": list(state.get("pmids", [])) + new_pmids,
+            "expand_pmids": new_pmids,
+        }
+
+    def _step_hydrate2(self, state: dict, task: Task) -> dict:
+        expand_pmids = state.get("expand_pmids", [])
+        todo = [p for p in expand_pmids if p not in {h["pmid"] for h in state.get("hydrated", [])}]
+        if not todo:
+            return {}
+        return self._step_hydrate({**state, "pmids": todo}, task)
+
+    def _step_screen2(self, state: dict, task: Task) -> dict:
+        expand_pmids = set(state.get("expand_pmids", []))
+        if not expand_pmids:
+            return {}
+        fresh = [item for item in state.get("hydrated", []) if item["pmid"] in expand_pmids]
+        decisions: list[dict] = list(state.get("decisions", []))
+        criteria = task.request.get("screen_criteria")
+        for item in fresh:
+            document = Document.model_validate(item["document"])
+            try:
+                decision = self.ports.screen.screen(document, criteria)
+            except Exception as exc:
+                raise WorkflowStepError(f"screen failed for {item['pmid']}: {exc}") from exc
+            decisions.append(decision.model_dump(mode="json"))
+        return {"decisions": decisions}
+
+    def _step_extract2(self, state: dict, task: Task) -> dict:
+        expand_pmids = set(state.get("expand_pmids", []))
+        relevant = {
+            d["document_id"]
+            for d in state.get("decisions", [])
+            if d["label"] in (ScreeningLabel.RELEVANT.value, ScreeningLabel.UNCERTAIN.value)
+        }
+        extractions: list[dict] = list(state.get("extractions", []))
+        for item in state.get("hydrated", []):
+            if item["pmid"] not in expand_pmids:
+                continue
+            if str(item["document"]["id"]) not in relevant:
+                continue
+            hydrated = HydratedDocument(
+                document=Document.model_validate(item["document"]),
+                version=item["version"],
+                section_spans=item["section_spans"],
+                fulltext_available=item["fulltext_available"],
+            )
+            try:
+                evidence_items = self.ports.extract.extract(hydrated)
+            except Exception as exc:
+                raise WorkflowStepError(f"extract failed for {item['pmid']}: {exc}") from exc
+            for evidence in evidence_items:
+                dump = evidence.model_dump(mode="json")
+                dump["_pmid"] = item["pmid"]
+                extractions.append(dump)
+        return {"extractions": extractions}
+
+    def _step_normalize2(self, state: dict, task: Task) -> dict:
+        known = {r["mention"] for r in state.get("resolutions", [])}
+        resolutions: list[dict] = list(state.get("resolutions", []))
+        for extraction in state.get("extractions", []):
+            mention = extraction["biomarker_mention"]
+            if mention in known:
+                continue
+            known.add(mention)
+            try:
+                candidates, needs_review = self.ports.normalize.resolve(
+                    mention, (extraction.get("biomarker_type") or "GENE").upper()
+                )
+            except Exception as exc:
+                raise WorkflowStepError(f"normalize failed for {mention}: {exc}") from exc
+            resolutions.append({
+                "mention": mention,
+                "candidates": [c.__dict__ for c in candidates],
+                "needs_review": needs_review,
+            })
+        return {"resolutions": resolutions}
+
+    def _step_verify2(self, state: dict, task: Task) -> dict:
+        verified_mentions = {v["biomarker_mention"] for v in state.get("verified", [])}
+        verified: list[dict] = list(state.get("verified", []))
+        for extraction in state.get("extractions", []):
+            mention = extraction["biomarker_mention"]
+            if mention in verified_mentions:
+                continue
+            verified_mentions.add(mention)
+            evidence = _extraction_model(extraction)
+            signature = _provisional_signature(evidence, state)
+            try:
+                result = self.ports.verify.verify(signature, evidence)
+            except Exception as exc:
+                raise WorkflowStepError(f"verify failed: {exc}") from exc
+            verified.append({
+                "biomarker_mention": mention,
+                "polarity": result.polarity.value,
+                "statistically_significant": result.statistically_significant,
+                "independent_validation": result.independent_validation,
+                "needs_human_review": result.needs_human_review,
+                "reasons": result.reasons,
+            })
         return {"verified": verified}
 
     def _step_aggregate(self, state: dict, task: Task) -> dict:
@@ -334,6 +507,11 @@ class MiningWorkflow:
                     statistics=ev.statistics,
                 )
                 evidence_rows.append(domain_evidence)
+            # 独立验证自动检测：同一结论在 ≥2 篇不同文献中同向成立
+            distinct_docs = {e.document_id for e in evidence_rows}
+            if len(distinct_docs) >= 2:
+                for e in evidence_rows:
+                    e.study.independent_validation = True
             stored = claims_repo.create_candidate_claim(claim, evidence_rows)
             if unresolved:
                 claims_repo.mark_evidence_needs_review(stored.id)

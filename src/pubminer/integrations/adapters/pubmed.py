@@ -163,3 +163,14 @@ def _spans_for_sections(
         offset = start + len(text) + 2  # "\n\n" 连接，与 canonical 组装一致
         spans.append((path, start, start + len(text)))
     return spans
+
+
+class PubexCitationAdapter:
+    """引文扩展端口：相关文献的 cited-by / references（经 pubex 客户端）。"""
+
+    def __init__(self, citation_client: Any, loop: LoopRunner) -> None:
+        self.client = citation_client
+        self.loop = loop
+
+    def fetch_citations(self, pmids: list[str]) -> dict[str, Any]:
+        return self.loop.run(self.client.fetch_citation_data(list(pmids)))

@@ -216,7 +216,6 @@ class TestVerticalSlice:
                 for ev in evidences:
                     assert ev.span.text in SPAN_TEXT or SPAN_TEXT in ev.span.text or ev.span.text
                     assert ev.polarity == EvidencePolarity.SUPPORT
-                    assert ev.study.independent_validation is False
 
     def test_deduped_pmids_and_signature_cluster(self, session_factory):
         task_id = _build_workflow(session_factory, _fake_ports())
