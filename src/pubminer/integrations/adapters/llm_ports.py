@@ -222,49 +222,6 @@ class LlmExtractPort:
         return str(payload.get("evidence_span", "")).strip() or None
 
 
-    """verification/v1：极性判定，confidence 不转真值。"""
-
-    def __init__(self, llm: LLMPort, prompt_registry) -> None:
-        self.llm = llm
-        self.prompts = prompt_registry
-
-    def verify(self, claim_signature: str, evidence: BiomarkerEvidence) -> VerificationResult:
-        prompt = self.prompts.get("verification", "v1")
-        response = self.llm.structured_generate(
-            LLMRequest(
-                purpose="verification",
-                prompt_version="verification@v1",
-                system=prompt.system,
-                user=prompt.render(
-                    claim=claim_signature,
-                    passage=evidence.evidence_span.text[:_MAX_CONTEXT_CHARS],
-                ),
-                temperature=0.0,
-                max_tokens=4096,
-                metadata={"schema_version": "verification-v1"},
-            ),
-            VerificationResult,
-        )
-        payload = _parse_json(response.text)
-        from pubminer.domain.evidence import AnalysisType
-
-        analysis = str(payload.get("analysis_type", "unknown"))
-        try:
-            analysis_type = AnalysisType(analysis)
-        except ValueError:
-            analysis_type = AnalysisType.UNKNOWN
-        return VerificationResult(
-            polarity=str(payload.get("polarity", "UNCERTAIN")).upper(),
-            entity_correct=payload.get("entity_correct"),
-            disease_correct=payload.get("disease_correct"),
-            endpoint_correct=payload.get("endpoint_correct"),
-            statistically_significant=payload.get("statistically_significant"),
-            analysis_type=analysis_type,
-            independent_validation=payload.get("independent_validation"),
-            reasons=[str(r) for r in payload.get("reasons", [])],
-            needs_human_review=bool(payload.get("needs_human_review", False)),
-        )
-
 
 _QUOTE_MAP = {
     "‘": "'", "’": "'", "“": '"', "”": '"',
@@ -335,16 +292,28 @@ class LlmVerifyPort:
         self.prompts = prompt_registry
 
     def verify(self, claim_signature: str, evidence) -> VerificationResult:
+        from pubminer.workflows.verification_rules import rule_assess
+
         prompt = self.prompts.get("verification", "v1")
+        span_text = evidence.evidence_span.text[:_MAX_CONTEXT_CHARS]
+        stats = evidence.statistics.model_dump() if evidence.statistics else None
+        rule_hint = rule_assess(span_text, stats)
+
+        hint_lines = []
+        if rule_hint.get("statistically_significant") is not None:
+            hint_lines.append(
+                f"Rule-based pre-check: p-value {'<' if rule_hint['statistically_significant'] else '>='} 0.05 "
+                f"({'; '.join(rule_hint['rule_reasons'])})"
+            )
+        hint_text = "\n".join(hint_lines)
+
+        suffix = "\n\n" + hint_text if hint_text else ""
         response = self.llm.structured_generate(
             LLMRequest(
                 purpose="verification",
                 prompt_version="verification@v1",
                 system=prompt.system,
-                user=prompt.render(
-                    claim=claim_signature,
-                    passage=evidence.evidence_span.text[:_MAX_CONTEXT_CHARS],
-                ),
+                user=prompt.render(claim=claim_signature, passage=span_text) + suffix,
                 temperature=0.0,
                 max_tokens=4096,
                 metadata={"schema_version": "verification-v1"},
@@ -372,12 +341,3 @@ class LlmVerifyPort:
         )
 
 
-def _parse_json(text: str) -> dict:
-    import json
-
-    text = text.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start >= 0 and end > start:
-        return json.loads(text[start : end + 1])
-    return json.loads(text)
