@@ -55,6 +55,7 @@ class ClaimContext(BaseModel):
 
     disease_entity_id: UUID | None = None
     disease_name: str = ""
+    disease_mesh_id: str | None = Field(None, description="resolver 返回的 MeSH id（如 D010190），用于跨库聚类")
     outcome: str | None = Field(None, description="如 overall_survival / progression_free_survival")
     subtype: str | None = None
     assay: str | None = Field(None, description="如 IHC / qPCR")

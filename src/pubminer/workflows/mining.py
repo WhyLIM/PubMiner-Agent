@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from pubminer.domain.claims import (
     Claim,
+    build_canonical_signature,
     ClaimContext,
     Direction,
     Predicate,
@@ -479,6 +480,22 @@ class MiningWorkflow:
             signature = _provisional_signature(evidence, state, resolution)
             clusters.setdefault(signature, []).append((extraction, resolution))
 
+        # 疾病归一化：将 disease mention 解析为 MeSH，聚合同一疾病的不同写法
+        disease_resolutions: dict[str, dict | None] = {}
+        for extraction in state.get("extractions", []):
+            disease = extraction.get("disease_mention")
+            if disease and disease not in disease_resolutions:
+                try:
+                    candidates, _review = self.ports.normalize.resolve(disease, "DISEASE")
+                except Exception as exc:
+                    logger.warning("disease normalize failed for %r: %s", disease, exc)
+                    disease_resolutions[disease] = None
+                    continue
+                disease_resolutions[disease] = (
+                    {"candidates": [c.__dict__ for c in candidates]}
+                    if candidates else None
+                )
+
         for signature, members in clusters.items():
             first_extraction, first_resolution = members[0]
             evidence_model = _extraction_model(first_extraction)
@@ -487,6 +504,16 @@ class MiningWorkflow:
             )
             polarity = self._polarity_for(state, first_extraction["biomarker_mention"])
             claim = self._build_claim(signature, subject_entity, evidence_model, state)
+            disease_mesh = self._disease_mesh_id(state, evidence_model.disease_mention, disease_resolutions)
+            if disease_mesh:
+                claim.context.disease_mesh_id = disease_mesh
+                claim.canonical_signature = build_canonical_signature(
+                    subject_identifier=signature.split(" | ")[0],
+                    predicate=claim.predicate,
+                    object_identifier=f"MESH:{disease_mesh}",
+                    direction=claim.direction,
+                    context=claim.context,
+                )
             evidence_rows = []
             for extraction, resolution in members:
                 ev = _extraction_model(extraction)
@@ -526,6 +553,15 @@ class MiningWorkflow:
         return {"claims": created}
 
     # ------------------------------------------------------------------ helpers
+
+    def _disease_mesh_id(self, state: dict, disease: str | None, disease_resolutions: dict) -> str | None:
+        if not disease:
+            return None
+        resolution = disease_resolutions.get(disease)
+        if not resolution or not resolution.get("candidates"):
+            return None
+        identifier = resolution["candidates"][0].get("identifier") or ""
+        return identifier.split(":", 1)[1] if identifier.upper().startswith("MESH:") else None
 
     def _resolution_for(self, state: dict, mention: str) -> dict | None:
         for resolution in state.get("resolutions", []):

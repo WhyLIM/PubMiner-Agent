@@ -103,14 +103,15 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
         goal_parser = GoalParseAdapter(gateway, prompt_registry)
         gene_resolver = EntrezGeneResolver(loop, email=email, api_key=api_key)
         pubtator_resolver = PubTatorEntityResolver(loop)
-        normalize = CompositeEntityResolver(gene_resolver=gene_resolver, pubtator_resolver=pubtator_resolver)
+        composite = CompositeEntityResolver(gene_resolver=gene_resolver, pubtator_resolver=pubtator_resolver)
+
         citations = PubexCitationAdapter(pubmed_client, loop)
         ports = SimpleNamespace(
             search=PubexSearchAdapter(pubmed_client, loop),
             hydrate=PubexHydrateAdapter(pubmed_client, pmc_client, loop),
             screen=LlmScreenPort(gateway, prompt_registry),
             extract=LlmExtractPort(gateway, prompt_registry),
-            normalize=normalize,
+            normalize=composite,
             citations=citations,
             verify=LlmVerifyPort(gateway, prompt_registry),
             goal_parser=goal_parser,
@@ -122,6 +123,15 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
 
     container = build_container(db_url, workflow_ports=ports)
     container.notes = notes  # type: ignore[attr-defined]
+
+    if ports is not None:
+        # 解析缓存：包装 composite resolver（复用同一 session_factory）
+        from pubminer.workflows.normalize_cache import CachedEntityResolver
+
+        ports.normalize = CachedEntityResolver(
+            ports.normalize, container.session_factory,
+            resolver_name=f"composite@{container.pipeline_release}",
+        )
     return container, notes
 
 
