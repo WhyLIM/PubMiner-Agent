@@ -248,16 +248,47 @@ class MiningWorkflow:
         criteria = task.request.get("screen_criteria")
         decisions: list[dict] = list(state.get("decisions", []))
         seen_docs = {d["document_id"] for d in decisions}
+        embedding_service = getattr(self.ports, "embedding_service", None)
+
+        # 第一级：embedding 预筛（万级文献时跳过明显不相关的，节省 LLM 调用）
+        to_screen: list[dict] = []
         for item in state.get("hydrated", []):
             doc_id = str(item["document"]["id"])
             if doc_id in seen_docs:
                 continue
+            to_screen.append(item)
+
+        if embedding_service and len(to_screen) > 20:
+            profile = embedding_service.build_profile(
+                criteria or task.request.get("screen_criteria", "biomarker evidence")
+            )
+            candidates = [
+                {"pmid": item["pmid"], "doc_id": doc_id,
+                 "abstract": item["document"].get("abstract", "")}
+                for item, doc_id in ((item, str(item["document"]["id"])) for item in to_screen)
+                for item in [item]
+            ]
+            texts = [c["abstract"] for c in candidates]
+            passed_ids = {
+                c["doc_id"] for c, score in zip(
+                    candidates, embedding_service.similarity_to_profile(profile, texts)
+                ) if score >= embedding_service.threshold
+            }
+            pre_filter_count = len(to_screen)
+            to_screen = [item for item in to_screen if str(item["document"]["id"]) in passed_ids]
+            logger.info(
+                "embedding prefilter: %d/%d passed", len(to_screen), pre_filter_count
+            )
+
+        # 第二级：LLM 筛选 + 全文级联升级
+        for item in to_screen:
+            doc_id = str(item["document"]["id"])
             document = Document.model_validate(item["document"])
             try:
                 decision = self.ports.screen.screen(document, criteria)
             except Exception as exc:
                 raise WorkflowStepError(f"screen failed for {item['pmid']}: {exc}") from exc
-            # 级联升级：摘要判 UNCERTAIN 且有全文时用全文重筛
+            # 第三级：摘要判 UNCERTAIN 且有全文时用全文重筛
             if (
                 decision.label == ScreeningLabel.UNCERTAIN
                 and item.get("fulltext_available")
@@ -267,7 +298,7 @@ class MiningWorkflow:
                         document, criteria, fulltext_upgrade=item["version"]["canonical_text"]
                     )
                 except Exception:
-                    pass  # 全文重筛失败保留摘要结果
+                    pass
             decisions.append(decision.model_dump(mode="json"))
         return {"decisions": decisions}
 

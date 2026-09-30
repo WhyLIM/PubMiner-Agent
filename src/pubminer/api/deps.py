@@ -132,6 +132,22 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
             ports.normalize, container.session_factory,
             resolver_name=f"composite@{container.pipeline_release}",
         )
+
+    # embedding service（万级文献筛选预过滤）
+    llm_key = env.get("PUBMINER_LLM_API_KEY", "")
+    llm_base = env.get("PUBMINER_LLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
+    embed_model = env.get("PUBMINER_EMBEDDING_MODEL", "embedding-3")
+    embed_dims = int(env.get("PUBMINER_EMBEDDING_DIMENSIONS", "2048"))
+    if llm_key:
+        from pubminer.integrations.llm.providers.embedding import EmbeddingProvider
+        from pubminer.workflows.embedding_service import EmbeddingService
+
+        embed_provider = EmbeddingProvider(
+            llm_key, embed_model, base_url=llm_base, dimensions=embed_dims,
+        )
+        container.embedding_service = EmbeddingService(embed_provider.embed)
+        notes.append(f"embedding service wired: {embed_model} dim={embed_dims}")
+
     return container, notes
 
 
@@ -143,6 +159,7 @@ class Container:
     pipeline_release: str = "mvp-0.1"
     request_counter: int = 0
     notes: list = field(default_factory=list)
+    embedding_service: Any = None
 
     def next_request_id(self) -> str:
         self.request_counter += 1
