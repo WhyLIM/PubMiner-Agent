@@ -109,6 +109,13 @@ class LlmExtractPort:
         class _ExtractionOut(BaseModel):
             items: list[_Item] = []
 
+        def _repair_out_model():
+            from pydantic import BaseModel as _BM
+
+            class _RepairOut(_BM):
+                evidence_span: str
+            return _RepairOut
+
         prompt = self.prompts.get("extraction/biomarker", "v1")
         response = self.llm.structured_generate(
             LLMRequest(
@@ -128,14 +135,19 @@ class LlmExtractPort:
         for raw in payload.get("items", []):
             located = locate_span(canonical, str(raw.get("evidence_span", "")).strip())
             if located is None:
+                # 二次修复：用 mention 所在的原文片段重新请求逐字摘录
+                repaired = self._repair_span(canonical, raw)
+                if repaired is not None:
+                    raw = {**raw, "evidence_span": repaired}
+                    located = locate_span(canonical, repaired.strip())
+            if located is None:
                 # grounding 失败：丢弃该条（宁可漏，不可造）
                 logger.warning(
                     "dropped extraction for %r: evidence_span not found in canonical text",
                     raw.get("biomarker_mention"),
                 )
                 continue
-            start, matched_text = located
-            span_text = matched_text
+            start, span_text = located
             section = _section_at(hydrated.section_spans, start)
             study_design = raw.get("study_design") or "unknown"
             try:
@@ -169,8 +181,47 @@ class LlmExtractPort:
                                raw.get("biomarker_mention"), exc)
         return results
 
+    def _repair_span(self, canonical: str, raw: dict) -> str | None:
+        """span 二次修复：围绕 mention 所在片段请求逐字重摘。尽力而为。"""
+        mention = str(raw.get("biomarker_mention", "")).strip()
+        if not mention:
+            return None
+        anchor = canonical.lower().find(mention.lower())
+        if anchor < 0:
+            return None
+        window_start = max(0, anchor - 600)
+        window = canonical[window_start : anchor + 900]
 
-class LlmVerifyPort:
+        from pydantic import BaseModel as _BM
+
+        class _RepairOut(_BM):
+            evidence_span: str
+
+        repair_prompt = self.prompts.get("extraction/biomarker", "v1")
+        exact_instruction = (
+            "IMPORTANT: the evidence_span MUST be copied character-for-character "
+            "from the passage above. Do not paraphrase or merge sentences."
+        )
+        try:
+            response = self.llm.structured_generate(
+                LLMRequest(
+                    purpose="extraction-repair",
+                    prompt_version="extraction/biomarker@v1",
+                    system=repair_prompt.system,
+                    user=repair_prompt.render(passage=window) + "\n\n" + exact_instruction,
+                    temperature=0.0,
+                    max_tokens=4096,
+                    metadata={"schema_version": "biomarker-v1", "repair": "1"},
+                ),
+                _RepairOut,
+            )
+            payload = _parse_json(response.text)
+        except Exception as exc:
+            logger.warning("span repair failed for %r: %s", mention, exc)
+            return None
+        return str(payload.get("evidence_span", "")).strip() or None
+
+
     """verification/v1：极性判定，confidence 不转真值。"""
 
     def __init__(self, llm: LLMPort, prompt_registry) -> None:
@@ -263,6 +314,62 @@ def _section_at(section_spans: list, start: int) -> str:
         if span_start <= start < span_end:
             return path
     return "OTHER"
+
+
+def _parse_json(text: str) -> dict:
+    import json
+
+    text = text.strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        return json.loads(text[start : end + 1])
+    return json.loads(text)
+
+
+class LlmVerifyPort:
+    """verification/v1：极性判定，confidence 不转真值。"""
+
+    def __init__(self, llm, prompt_registry) -> None:
+        self.llm = llm
+        self.prompts = prompt_registry
+
+    def verify(self, claim_signature: str, evidence) -> VerificationResult:
+        prompt = self.prompts.get("verification", "v1")
+        response = self.llm.structured_generate(
+            LLMRequest(
+                purpose="verification",
+                prompt_version="verification@v1",
+                system=prompt.system,
+                user=prompt.render(
+                    claim=claim_signature,
+                    passage=evidence.evidence_span.text[:_MAX_CONTEXT_CHARS],
+                ),
+                temperature=0.0,
+                max_tokens=4096,
+                metadata={"schema_version": "verification-v1"},
+            ),
+            VerificationResult,
+        )
+        payload = _parse_json(response.text)
+        from pubminer.domain.evidence import AnalysisType
+
+        analysis = str(payload.get("analysis_type", "unknown"))
+        try:
+            analysis_type = AnalysisType(analysis)
+        except ValueError:
+            analysis_type = AnalysisType.UNKNOWN
+        return VerificationResult(
+            polarity=str(payload.get("polarity", "UNCERTAIN")).upper(),
+            entity_correct=payload.get("entity_correct"),
+            disease_correct=payload.get("disease_correct"),
+            endpoint_correct=payload.get("endpoint_correct"),
+            statistically_significant=payload.get("statistically_significant"),
+            analysis_type=analysis_type,
+            independent_validation=payload.get("independent_validation"),
+            reasons=[str(r) for r in payload.get("reasons", [])],
+            needs_human_review=bool(payload.get("needs_human_review", False)),
+        )
 
 
 def _parse_json(text: str) -> dict:
