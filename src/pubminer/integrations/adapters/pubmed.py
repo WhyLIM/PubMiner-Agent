@@ -58,7 +58,87 @@ class PubexHydrateAdapter:
         self.loop = loop
         self.include_fulltext = include_fulltext
 
+    def hydrate_many(self, pmids: list[str]) -> list[HydratedDocument | None]:
+        """批量水合：一次 efetch 取全部元数据，逐篇尝试 PMC 全文。"""
+        if not pmids:
+            return []
+        records = self.loop.run(self.metadata_client.fetch_batch(pmids, batch_size=max(len(pmids), 1)))
+        by_pmid = {r.pmid: r for r in records}
+        results: list[HydratedDocument | None] = []
+        for pmid in pmids:
+            record = by_pmid.get(pmid)
+            if record is None:
+                results.append(None)
+                continue
+            results.append(self._build_hydrated(record, pmid))
+        return results
+
     def hydrate(self, pmid: str) -> HydratedDocument | None:
+        records = self.loop.run(self.metadata_client.fetch_batch([pmid], batch_size=1))
+        if not records:
+            return None
+        return self._build_hydrated(records[0], pmid)
+
+    def _build_hydrated(self, record, pmid: str) -> HydratedDocument:
+        from datetime import datetime, timezone
+
+        identifiers = [DocumentIdentifier(kind="pmid", value=record.pmid)]
+        if record.pmcid:
+            identifiers.append(DocumentIdentifier(kind="pmcid", value=record.pmcid))
+        if record.doi:
+            identifiers.append(DocumentIdentifier(kind="doi", value=record.doi))
+
+        document = Document(
+            identifiers=identifiers, title=record.title or "",
+            journal=record.journal, year=record.year,
+            authors=list(record.authors), abstract=record.abstract or "",
+        )
+
+        fulltext = self._try_pmc_fulltext(record) if self.include_fulltext else None
+        if fulltext is not None:
+            pubex_version, license_name = fulltext
+            domain_version = DocumentVersion(
+                document_id=document.id, title=document.title,
+                canonical_text=pubex_version.canonical_text,
+                license=license_name, source="pmc-oa",
+                retrieved_at=datetime.now(timezone.utc),
+            )
+            spans = [(p.section_path, p.start_char, p.end_char) for p in pubex_version.passages]
+            return HydratedDocument(
+                document=document, version=domain_version,
+                section_spans=spans, fulltext_available=True,
+            )
+
+        sections = self._abstract_sections(document.title, document.abstract)
+        version = DocumentVersion(
+            document_id=document.id, title=document.title,
+            canonical_text="\n\n".join(text for _, text in sections),
+            source="pubmed-abstract", retrieved_at=datetime.now(timezone.utc),
+        )
+        spans = self._spans_for_sections(version.canonical_text, sections)
+        return HydratedDocument(
+            document=document, version=version,
+            section_spans=spans, fulltext_available=False,
+        )
+
+    @staticmethod
+    def _abstract_sections(title: str, abstract: str) -> list[tuple[str, str]]:
+        sections = []
+        if title:
+            sections.append(("TITLE", title))
+        if abstract:
+            sections.append(("ABSTRACT", abstract[:8000]))
+        return sections
+
+    @staticmethod
+    def _spans_for_sections(canonical: str, sections):
+        spans = []
+        offset = 0
+        for path, text in sections:
+            start = offset
+            offset = start + len(text) + 2
+            spans.append((path, start, start + len(text)))
+        return spans
         records = self.loop.run(self.metadata_client.fetch_batch([pmid], batch_size=1))
         if not records:
             logger.warning("no metadata for %s", pmid)

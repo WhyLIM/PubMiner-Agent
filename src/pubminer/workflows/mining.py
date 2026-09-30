@@ -246,13 +246,28 @@ class MiningWorkflow:
 
     def _step_screen(self, state: dict, task: Task) -> dict:
         criteria = task.request.get("screen_criteria")
-        decisions: list[dict] = []
+        decisions: list[dict] = list(state.get("decisions", []))
+        seen_docs = {d["document_id"] for d in decisions}
         for item in state.get("hydrated", []):
+            doc_id = str(item["document"]["id"])
+            if doc_id in seen_docs:
+                continue
             document = Document.model_validate(item["document"])
             try:
                 decision = self.ports.screen.screen(document, criteria)
             except Exception as exc:
                 raise WorkflowStepError(f"screen failed for {item['pmid']}: {exc}") from exc
+            # 级联升级：摘要判 UNCERTAIN 且有全文时用全文重筛
+            if (
+                decision.label == ScreeningLabel.UNCERTAIN
+                and item.get("fulltext_available")
+            ):
+                try:
+                    decision = self.ports.screen.screen(
+                        document, criteria, fulltext_upgrade=item["version"]["canonical_text"]
+                    )
+                except Exception:
+                    pass  # 全文重筛失败保留摘要结果
             decisions.append(decision.model_dump(mode="json"))
         return {"decisions": decisions}
 
