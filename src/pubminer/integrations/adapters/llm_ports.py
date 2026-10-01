@@ -76,9 +76,10 @@ class LlmScreenPort:
 class LlmExtractPort:
     """extraction/biomarker/v1：多目标抽取 + verbatim span 定位。"""
 
-    def __init__(self, llm: LLMPort, prompt_registry) -> None:
+    def __init__(self, llm: LLMPort, prompt_registry, *, extra_fields_spec: str = "") -> None:
         self.llm = llm
         self.prompts = prompt_registry
+        self.extra_fields_spec = extra_fields_spec
 
     def extract(self, hydrated: HydratedDocument) -> tuple[list[BiomarkerEvidence], dict | None]:
         version = hydrated.version
@@ -140,7 +141,8 @@ class LlmExtractPort:
                 purpose="extraction",
                 prompt_version="extraction/biomarker@v1",
                 system=prompt.system,
-                user=prompt.render(passage=canonical[:_MAX_CONTEXT_CHARS]),
+                user=prompt.render(passage=canonical[:_MAX_CONTEXT_CHARS])
+                    + (("\n" + self.extra_fields_spec) if self.extra_fields_spec else ""),
                 temperature=0.0,
                 max_tokens=8192,
                 metadata={"schema_version": "biomarker-v1"},

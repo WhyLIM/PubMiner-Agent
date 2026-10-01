@@ -343,8 +343,6 @@ def create_app(container: Container) -> FastAPI:
 
     @app.get("/api/v1/claims/{claim_id}/evidence")
     def get_claim_evidence(claim_id: str) -> schemas.ClaimEvidenceResponse:
-        from pubminer.infrastructure.db.orm_documents import DocumentVersionRow
-
         cid = _parse_uuid(claim_id, "claim")
         with session_scope(container.session_factory) as session:
             claim_repo = container.claim_repository(session)
@@ -371,8 +369,8 @@ def create_app(container: Container) -> FastAPI:
                         statistics=ev.statistics.model_dump(mode="json") if ev.statistics else None,
                         review_status=ev.review_status,
                         document_version_id=str(ev.document_version_id),
-                        document_title=version_row.title if version_row else "",
-                        canonical_text=version_row.canonical_text if version_row else "",
+                        document_title="",
+                        canonical_text="",
                     )
                 )
             return schemas.ClaimEvidenceResponse(
@@ -690,8 +688,6 @@ def create_app(container: Container) -> FastAPI:
         from sqlalchemy import select
 
         from pubminer.infrastructure.db.orm_claims import ClaimRow, EvidenceRow
-        from pubminer.infrastructure.db.orm_documents import DocumentVersionRow
-
         with session_scope(container.session_factory) as session:
             rows = session.execute(
                 select(ClaimRow).where(ClaimRow.status == status).limit(min(limit, 500))
@@ -702,7 +698,6 @@ def create_app(container: Container) -> FastAPI:
                     select(EvidenceRow).where(EvidenceRow.claim_id == row.id)
                 ).scalars().all()
                 for ev in evidence_list:
-                    dv = session.get(DocumentVersionRow, ev.document_version_id)
                     stats = ev.statistics or {}
                     items.append({
                         "biomarker": _extract_biomarker_name(row.canonical_signature),

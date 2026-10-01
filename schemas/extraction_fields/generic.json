@@ -1,0 +1,7 @@
+{
+  "name": "generic-biomarker",
+  "description": "通用生物标志物字段集（不针对特定领域）",
+  "version": "1.0",
+  "fields": [],
+  "export_mappings": {}
+}

@@ -1,0 +1,30 @@
+{
+  "name": "colorectal-cancer-biomarker",
+  "description": "结直肠癌生物标志物数据库（CBD）字段集",
+  "version": "1.0",
+  "fields": [
+    {"key": "detection_method", "label": "检测方法", "type": "string", "hint": "如 IHC / qPCR / western blot / FISH"},
+    {"key": "sample_type", "label": "样本类型", "type": "string", "hint": "如 tissue / blood / serum / stool"},
+    {"key": "tumor_location", "label": "肿瘤位置", "type": "string", "hint": "如 colon / rectum / colorectal"},
+    {"key": "cancer_stage", "label": "肿瘤分期", "type": "string", "hint": "如 I-III / Tis / IV"},
+    {"key": "study_conclusion", "label": "研究结论", "type": "text", "hint": "作者的主要结论（一句话）"},
+    {"key": "drugs", "label": "相关药物", "type": "string", "hint": "文中提及的相关治疗药物"},
+    {"key": "multivariate_adjusted", "label": "多变量校正", "type": "boolean", "hint": "是否进行了多变量统计校正"}
+  ],
+  "export_mappings": {
+    "cbd": {
+      "detection_method": "experiment",
+      "sample_type": "source",
+      "tumor_location": "location",
+      "cancer_stage": "stage",
+      "study_conclusion": "conclusion",
+      "drugs": "drugs",
+      "population.n": "number",
+      "population.age_mean": "age_mean",
+      "population.ethnicity": "race",
+      "population.country": "region",
+      "population.male_count": "male",
+      "population.female_count": "female"
+    }
+  }
+}
