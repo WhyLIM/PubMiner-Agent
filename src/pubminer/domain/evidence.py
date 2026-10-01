@@ -53,6 +53,10 @@ class Population(BaseModel):
     ethnicity: str | None = None
     country: str | None = None
     age_range: str | None = None
+    age_mean: float | None = None
+    tumor_location: str | None = Field(None, description="如 colon / rectum / CRC")
+    male_count: int | None = None
+    female_count: int | None = None
 
 
 class Statistics(BaseModel):
@@ -88,6 +92,11 @@ class StudyAttributes(BaseModel):
     independent_cohort: bool | None = None
     population: Population = Field(default_factory=Population)
     follow_up_months: int | None = None
+    detection_method: str | None = Field(None, description="如 IHC / qPCR / western blot")
+    sample_type: str | None = Field(None, description="如 tissue / blood / serum")
+    study_conclusion: str | None = None
+    drugs: str | None = None
+    evidence_source: str = Field("abstract", description="abstract | fulltext")
 
 
 class Evidence(BaseModel):
@@ -142,6 +151,7 @@ class BiomarkerEvidence(BaseModel):
     study_design: StudyDesign = StudyDesign.UNKNOWN
     statistics: Statistics | None = None
     evidence_span: EvidenceSpan
+    evidence_source: str = Field("abstract", description="abstract | fulltext")
 
     @model_validator(mode="after")
     def _check_role(self) -> "BiomarkerEvidence":

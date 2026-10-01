@@ -120,9 +120,10 @@ def _fake_ports(fail_search_times: int = 0):
                     population=Population(n=412),
                     study_design=StudyDesign.RETROSPECTIVE_COHORT,
                     statistics=Statistics(effect_measure="HR", effect_value="2.1", p_value="<0.001"),
+                    evidence_source="fulltext",
                     evidence_span=span,
                 )
-            ]
+            ], {"n": 412}
 
     class FakeNormalize:
         def resolve(self, mention, entity_type):

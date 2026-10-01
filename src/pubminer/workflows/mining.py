@@ -314,6 +314,7 @@ class MiningWorkflow:
             if d["label"] in (ScreeningLabel.RELEVANT.value, ScreeningLabel.UNCERTAIN.value)
         }
         extractions: list[dict] = []
+        study_contexts: list[dict] = list(state.get("study_contexts", []))
         for item in state.get("hydrated", []):
             if str(item["document"]["id"]) not in relevant:
                 continue
@@ -324,12 +325,28 @@ class MiningWorkflow:
                 fulltext_available=item["fulltext_available"],
             )
             try:
-                evidence_items = self.ports.extract.extract(hydrated)
+                _result = self.ports.extract.extract(hydrated)
+                if isinstance(_result, tuple):
+                    evidence_items, study_ctx = _result
+                else:
+                    evidence_items, study_ctx = _result, None
             except Exception as exc:
                 raise WorkflowStepError(f"extract failed for {item['pmid']}: {exc}") from exc
+            source = "fulltext" if item.get("fulltext_available") else "abstract"
             for evidence in evidence_items:
-                extractions.append(evidence.model_dump(mode="json"))
-        return {"extractions": extractions}
+                if hasattr(evidence, "evidence_source"):
+                    evidence.evidence_source = source
+                dump = evidence.model_dump(mode="json")
+                dump["_pmid"] = item["pmid"]
+                extractions.append(dump)
+            if study_ctx:
+                ctx = dict(study_ctx) if isinstance(study_ctx, dict) else study_ctx.model_dump(mode="json")
+                ctx["_pmid"] = item["pmid"]
+                study_contexts.append(ctx)
+        output = {"extractions": extractions}
+        if study_contexts:
+            output["study_contexts"] = study_contexts
+        return output
 
     def _step_normalize(self, state: dict, task: Task) -> dict:
         resolutions: list[dict] = []
@@ -464,14 +481,27 @@ class MiningWorkflow:
                 fulltext_available=item["fulltext_available"],
             )
             try:
-                evidence_items = self.ports.extract.extract(hydrated)
+                _result = self.ports.extract.extract(hydrated)
+                if isinstance(_result, tuple):
+                    evidence_items, study_context = _result
+                else:
+                    evidence_items, study_context = _result, None
             except Exception as exc:
                 raise WorkflowStepError(f"extract failed for {item['pmid']}: {exc}") from exc
+            source = "fulltext" if item.get("fulltext_available") else "abstract"
             for evidence in evidence_items:
+                evidence.evidence_source = source
                 dump = evidence.model_dump(mode="json")
                 dump["_pmid"] = item["pmid"]
                 extractions.append(dump)
-        return {"extractions": extractions}
+            if study_context:
+                ctx = dict(study_context) if isinstance(study_context, dict) else study_context.model_dump(mode="json")
+                ctx["pmid"] = item["pmid"]
+                state.setdefault("study_contexts", []).append(ctx)
+        output = {"extractions": extractions}
+        if state.get("study_contexts"):
+            output["study_contexts"] = state["study_contexts"]
+        return output
 
     def _step_normalize2(self, state: dict, task: Task) -> dict:
         known = {r["mention"] for r in state.get("resolutions", [])}
@@ -581,6 +611,7 @@ class MiningWorkflow:
                     study=StudyAttributes(
                         design=ev.study_design,
                         independent_validation=self._independent(state, ev.biomarker_mention),
+                        evidence_source=ev.evidence_source,
                     ),
                     statistics=ev.statistics,
                 )

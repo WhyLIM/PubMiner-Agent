@@ -91,7 +91,7 @@ def _fake_ports():
                 biomarker_mention="KRAS", disease_mention="PDAC", role="prognostic",
                 direction="HIGH", outcome="overall_survival",
                 evidence_span=EvidenceSpan.from_text(version_id, _u(), SPAN, 0, "RESULTS"),
-            )]
+            )], {"n": 36}
 
     class N:
         def resolve(self, mention, entity_type):

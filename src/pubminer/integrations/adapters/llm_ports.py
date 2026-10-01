@@ -80,7 +80,7 @@ class LlmExtractPort:
         self.llm = llm
         self.prompts = prompt_registry
 
-    def extract(self, hydrated: HydratedDocument) -> list[BiomarkerEvidence]:
+    def extract(self, hydrated: HydratedDocument) -> tuple[list[BiomarkerEvidence], dict | None]:
         version = hydrated.version
         canonical = (
             version.get("canonical_text", "")
@@ -106,8 +106,26 @@ class LlmExtractPort:
             study_design: str | None = None
             evidence_span: str
 
+        class _StudyContext(BaseModel):
+            n: int | None = None
+            disease_stage: str | None = None
+            tumor_location: str | None = None
+            age_mean: float | None = None
+            age_range: str | None = None
+            ethnicity: str | None = None
+            country: str | None = None
+            male_count: int | None = None
+            female_count: int | None = None
+            detection_method: str | None = None
+            sample_type: str | None = None
+            follow_up_months: int | None = None
+            multivariate_adjusted: bool | None = None
+            study_conclusion: str | None = None
+            drugs: str | None = None
+
         class _ExtractionOut(BaseModel):
             items: list[_Item] = []
+            study_context: _StudyContext | None = None
 
         def _repair_out_model():
             from pydantic import BaseModel as _BM
@@ -160,10 +178,12 @@ class LlmExtractPort:
                 else None
             )
             try:
+                src = "fulltext" if hydrated.fulltext_available else "abstract"
                 results.append(
                     BiomarkerEvidence(
                         biomarker_mention=str(raw["biomarker_mention"]),
                         biomarker_type=raw.get("biomarker_type"),
+                        evidence_source=src,
                         disease_mention=raw.get("disease_mention") or "",
                         role=str(raw.get("role", "prognostic")),
                         direction=raw.get("direction"),
