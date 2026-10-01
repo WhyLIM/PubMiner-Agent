@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import {
   agentApi,
@@ -280,6 +280,44 @@ onMounted(async () => {
 });
 onBeforeUnmount(stopEventLoop);
 
+const displayIntents = ref<Array<{
+  name: string; query: string; explanation: string; editing: boolean;
+}>>([]);
+
+watch(() => session.value?.plans, (plans) => {
+  if (!plans?.length) return;
+  const latest = plans[plans.length - 1];
+  const intents = latest.steps
+    .filter(s => s.action_type === "SEARCH" && s.search_intent)
+    .map(s => JSON.parse(s.search_intent!));
+  if (intents.length && displayIntents.value.length === 0) {
+    displayIntents.value = intents.map(i => ({
+      ...i, editing: false,
+    }));
+  }
+}, { deep: true });
+
+const savingIntents = ref(false);
+async function saveIntents() {
+  if (!sessionId.value) return;
+  savingIntents.value = true;
+  try {
+    for (const intent of displayIntents.value) {
+      await agentApi.postMessage(sessionId.value, {
+        role: "user",
+        content: JSON.stringify([{ name: intent.name, query: intent.query }]),
+        kind: "search_intents_final",
+        payload: {},
+      });
+    }
+    ElMessage.success("检索式已保存");
+  } catch (err) {
+    error.value = describe(err);
+  } finally {
+    savingIntents.value = false;
+  }
+}
+
 const statusTag = (status: string) =>
   status === "COMPLETED" || status === "REVIEW_READY" ? "success"
   : status === "FAILED" ? "danger"
@@ -421,6 +459,47 @@ const statusTag = (status: string) =>
                 </el-tag>
               </el-collapse-item>
             </el-collapse>
+
+            <template v-if="session.task_spec?.disease">
+              <p class="section-label" style="margin-top: 14px">检索式（可修改后保存）</p>
+              <div class="intent-list">
+                <el-card
+                  v-for="(intent, idx) in displayIntents"
+                  :key="idx"
+                  shadow="never"
+                  class="intent-card"
+                >
+                  <div class="intent-header">
+                    <el-tag size="small">{{ intent.name }}</el-tag>
+                    <el-button
+                      v-if="!intent.editing" text size="small"
+                      @click="intent.editing = true"
+                    >编辑</el-button>
+                    <el-button
+                      v-else text size="small" type="primary"
+                      @click="intent.editing = false; saveIntents()"
+                    >保存</el-button>
+                  </div>
+                  <el-input
+                    v-if="intent.editing"
+                    v-model="intent.query"
+                    size="small"
+                    class="pm-mono"
+                  />
+                  <code v-else class="intent-query">{{ intent.query }}</code>
+                  <p v-if="intent.explanation" class="intent-explanation">
+                    {{ intent.explanation }}
+                  </p>
+                </el-card>
+                <el-button
+                  size="small" style="margin-top: 6px"
+                  :disabled="savingIntents"
+                  @click="saveIntents"
+                >
+                  保存最终检索式
+                </el-button>
+              </div>
+            </template>
 
             <p class="section-label" style="margin-top: 14px">行动轨迹</p>
             <el-timeline class="event-timeline">
@@ -572,5 +651,38 @@ const statusTag = (status: string) =>
 
 :deep(.selected-row) {
   --el-table-tr-bg-color: var(--pm-accent-soft);
+}
+
+.intent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.intent-card {
+  background: var(--pm-surface-2) !important;
+}
+
+.intent-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.intent-query {
+  font-family: "JetBrains Mono Variable", Consolas, monospace;
+  font-size: 12px;
+  color: var(--pm-text-1);
+  word-break: break-all;
+  display: block;
+  padding: 4px 0;
+}
+
+.intent-explanation {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+  line-height: 1.5;
 }
 </style>
