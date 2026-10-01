@@ -351,6 +351,8 @@ def create_app(container: Container) -> FastAPI:
                 raise HTTPException(404, f"claim {claim_id} not found")
             evidences = claim_repo.get_evidence(cid)
             items: list[schemas.ClaimEvidenceItem] = []
+            from pubminer.infrastructure.db.orm_documents import DocumentVersionRow
+
             for ev in evidences:
                 version_row = session.get(DocumentVersionRow, ev.document_version_id)
                 items.append(
@@ -369,8 +371,8 @@ def create_app(container: Container) -> FastAPI:
                         statistics=ev.statistics.model_dump(mode="json") if ev.statistics else None,
                         review_status=ev.review_status,
                         document_version_id=str(ev.document_version_id),
-                        document_title="",
-                        canonical_text="",
+                        document_title=version_row.title if version_row else "",
+                        canonical_text=version_row.canonical_text if version_row else "",
                     )
                 )
             return schemas.ClaimEvidenceResponse(
