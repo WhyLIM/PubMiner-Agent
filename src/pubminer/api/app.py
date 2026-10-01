@@ -684,10 +684,60 @@ def create_app(container: Container) -> FastAPI:
                 plan_version=plan.version,
             )
 
+    @app.get("/api/v1/export/cbd")
+    def export_cbd_format(status: str = "APPROVED", limit: int = 200):
+        """导出 CBD 格式（Colorectal Cancer Biomarker Database 兼容）。"""
+        from sqlalchemy import select
+
+        from pubminer.infrastructure.db.orm_claims import ClaimRow, EvidenceRow
+        from pubminer.infrastructure.db.orm_documents import DocumentVersionRow
+
+        with session_scope(container.session_factory) as session:
+            rows = session.execute(
+                select(ClaimRow).where(ClaimRow.status == status).limit(min(limit, 500))
+            ).scalars().all()
+            items = []
+            for row in rows:
+                evidence_list = session.execute(
+                    select(EvidenceRow).where(EvidenceRow.claim_id == row.id)
+                ).scalars().all()
+                for ev in evidence_list:
+                    dv = session.get(DocumentVersionRow, ev.document_version_id)
+                    stats = ev.statistics or {}
+                    items.append({
+                        "biomarker": _extract_biomarker_name(row.canonical_signature),
+                        "category": ev.study.get("design", "unknown") if ev.study else "unknown",
+                        "application": _predicate_to_application(row.predicate),
+                        "description": ev.span_text[:500],
+                        "conclusion": row.direction + " expression associated with outcome",
+                        "statistics": f"{stats.get('effect_measure', '')} {stats.get('effect_value', '')}, p {stats.get('p_value', '')}".strip(),
+                        "pmid": int(ev.document_id) if str(ev.document_id).isdigit() else None,
+                        "location": "Colorectal",
+                        "evidence_source": ev.study.get("evidence_source", "abstract") if ev.study else "abstract",
+                        "effect_measure": stats.get("effect_measure"),
+                        "effect_value": stats.get("effect_value"),
+                        "p_value": stats.get("p_value"),
+                        "confidence_interval": stats.get("confidence_interval"),
+                        "independent_validation": ev.study.get("independent_validation", False) if ev.study else False,
+                        "signature": row.canonical_signature,
+                        "claim_id": str(row.id),
+                        "evidence_id": str(ev.id),
+                    })
+            return {"total": len(items), "data": items}
+
+    def _extract_biomarker_name(signature: str) -> str:
+        """从 canonical signature 提取 biomarker 名（第一段 | 前部分）。"""
+        return signature.split(" | ")[0] if " | " in signature else signature
+
+    def _predicate_to_application(predicate: str) -> str:
+        return {
+            "PROGNOSTIC": "Prognosis",
+            "DIAGNOSTIC": "Diagnosis",
+            "PREDICTIVE": "Prediction",
+            "THERAPEUTIC": "Treatment",
+        }.get(predicate, predicate)
+
     return app
-
-
-# ---- 装配辅助（避免在路由内闭包内重复定义） ----
 
 def DocumentRepositoryOf(session):
     from pubminer.infrastructure.db.repositories.documents import DocumentRepository
