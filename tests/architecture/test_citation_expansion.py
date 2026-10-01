@@ -128,8 +128,9 @@ class _Citations:
 
 class TestCitationExpansion:
     def test_expansion_round_runs_and_flags_independent_validation(self, session_factory):
-        docs = {"111": _make_doc("111", SPAN_1), "222": _make_doc("222", SPAN_2)}
-        ports = _ports(["111"], docs, _Citations({"111": ["222"]}), mark_iv=True)
+        SPAN_3 = "Validation cohort confirmed KRAS as independent prognostic factor (HR 1.9)."
+        docs = {"111": _make_doc("111", SPAN_1), "222": _make_doc("222", SPAN_2), "333": _make_doc("333", SPAN_3)}
+        ports = _ports(["111"], docs, _Citations({"111": ["222", "333"]}), mark_iv=True)
         # SEARCH 只给第一轮；222 由扩展引入
 
         from pubminer.infrastructure.db.base import session_scope
@@ -161,14 +162,14 @@ class TestCitationExpansion:
             repo = TaskRepository(session)
             expand_index = next(s["index"] for s in steps if s["type"] == "EXPAND")
             expand_output = repo.step_output(task_id, expand_index)
-        assert expand_output["expand_pmids"] == ["222"]
+        assert expand_output["expand_pmids"] == ["222", "333"]
 
         # 同签名合并：单 claim、两条证据（来自两篇文献）、独立验证自动置真
         with session_scope(session_factory) as session:
             claim_rows = session.execute(select(ClaimRow)).scalars().all()
             assert len(claim_rows) == 1
             evidences = ClaimRepository(session).get_evidence(claim_rows[0].id)
-            assert len(evidences) == 2
+            assert len(evidences) == 3
             assert {e.document_id for e in evidences} and all(
                 e.study.independent_validation for e in evidences
             )

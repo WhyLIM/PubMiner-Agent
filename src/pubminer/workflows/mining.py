@@ -587,7 +587,7 @@ class MiningWorkflow:
                 evidence_rows.append(domain_evidence)
             # 独立验证自动检测：同一结论在 ≥2 篇不同文献中同向成立
             distinct_docs = {e.document_id for e in evidence_rows}
-            if len(distinct_docs) >= 2:
+            if len(distinct_docs) >= 3:
                 for e in evidence_rows:
                     e.study.independent_validation = True
             stored = claims_repo.create_candidate_claim(claim, evidence_rows)
