@@ -20,6 +20,7 @@ from pubminer.domain.entities import Entity, EntityAlias, EntityIdentifier, Enti
 from pubminer.domain.evidence import Evidence, EvidencePolarity, StudyAttributes
 from pubminer.domain.screening import ScreeningLabel
 from pubminer.domain.tasks import Task, TaskStatus
+from pubminer.integrations.adapters.pubmed_tags import validate_query
 from pubminer.infrastructure.db.repositories.entities import EntityRepository
 from pubminer.infrastructure.db.repositories.workflow import TaskRepository
 from pubminer.workflows.ports import HydratedDocument, MiningPorts, SearchIntent
@@ -203,6 +204,10 @@ class MiningWorkflow:
         ]
         pmids: list[str] = list(state.get("pmids", []))
         for intent in intents:
+            cleaned, removed = validate_query(intent.query)
+            if removed:
+                logger.warning("stripped invalid PubMed tags %s from query %r", removed, intent.query)
+                intent = SearchIntent(name=intent.name, query=cleaned, max_results=intent.max_results, date_range=intent.date_range)
             try:
                 records = self.ports.search.search(intent)
             except Exception as exc:

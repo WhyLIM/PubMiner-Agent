@@ -16,6 +16,7 @@ from pubminer.application.ports import LLMError
 from pubminer.infrastructure.db.orm_agents import AgentMessageRow as AgentMessageRow_
 from pubminer.domain.tasks import TaskStatus
 from pubminer.workflows import MiningWorkflow, SearchIntent
+from pubminer.integrations.adapters.pubmed_tags import validate_query
 from pubminer.workflows.mining import WorkflowFatalError
 
 
@@ -655,6 +656,7 @@ def create_app(container: Container) -> FastAPI:
             disease = current.task_spec.disease if current.task_spec else body.disease
             task_word = current.task_spec.task if current.task_spec else body.task
             query = f"{disease or ''} {task_word or ''} biomarker".strip()
+            query, _stripped = validate_query(query)
             screen_criteria = body.screen_criteria or (
                 f"{disease or 'the target disease'} / {task_word or 'biomarker'} / "
                 "independent cohort validation preferred"
