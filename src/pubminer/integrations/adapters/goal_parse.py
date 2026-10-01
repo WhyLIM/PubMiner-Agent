@@ -32,6 +32,7 @@ class GoalParseAdapter:
         class _SearchIntent(BaseModel):
             name: str
             query: str
+            explanation: str = ""
 
         class _Clarification(BaseModel):
             needed: bool = False
@@ -74,7 +75,8 @@ class GoalParseAdapter:
                 result[key] = value
 
         result["search_intents"] = [
-            {"name": si.get("name", f"intent_{i}"), "query": si.get("query", "")}
+            {"name": si.get("name", f"intent_{i}"), "query": si.get("query", ""),
+             "explanation": si.get("explanation", "")}
             for i, si in enumerate(payload.get("search_intents", []))
             if si.get("query")
         ]

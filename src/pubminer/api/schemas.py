@@ -304,6 +304,7 @@ class RunSessionResponse(BaseModel):
 class SearchIntentItem(BaseModel):
     name: str
     query: str
+    explanation: str = ""
 
 
 class ParseGoalResponse(BaseModel):
