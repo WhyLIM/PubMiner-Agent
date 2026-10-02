@@ -56,18 +56,15 @@ class TestResolutionCache:
     def test_cache_hit_avoids_resolver_call(self, session_factory):
 
         inner = CountingResolver()
-        with session_scope(session_factory):
+        cached = CachedEntityResolver(inner, session_factory)
 
-            cached = CachedEntityResolver(
-                inner, session_factory,
-            )
-            # 手动构造（CachedEntityResolver 内部自开 session）
-            cands, review = cached.resolve("KRAS", "GENE")
+        with session_scope(session_factory) as session:
+            cands, review = cached.resolve("KRAS", "GENE", session=session)
             assert inner.calls == 1
             assert cands[0].identifier == "NCBIGene:3845"
 
-            # 第二次（新 session）命中缓存
-            cands2, review2 = cached.resolve("  kras  ", "GENE")  # 键归一化相同
+        with session_scope(session_factory) as session2:
+            cands2, review2 = cached.resolve("  kras  ", "GENE", session=session2)  # 键归一化相同
             assert inner.calls == 1, "命中缓存时不得再调 resolver"
             assert cands2[0].identifier == "NCBIGene:3845"
 

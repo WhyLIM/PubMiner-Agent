@@ -558,7 +558,7 @@ class MiningWorkflow:
             disease = extraction.get("disease_mention")
             if disease and disease not in disease_resolutions:
                 try:
-                    candidates, _review = self.ports.normalize.resolve(disease, "DISEASE")
+                    candidates, _review = self.ports.normalize.resolve(disease, "DISEASE", session=self.task_repo.session)
                 except Exception as exc:
                     logger.warning("disease normalize failed for %r: %s", disease, exc)
                     disease_resolutions[disease] = None
