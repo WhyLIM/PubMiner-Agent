@@ -212,6 +212,7 @@ class MiningWorkflow:
         """水合即落库：document/version/passages 持久化，保证后续 evidence FK 有效。"""
         doc_repo = self.document_repo_factory(self.task_repo.session)
         hydrated: list[dict] = list(state.get("hydrated", []))
+        failed_hydrations: list[str] = []
         known = {h["pmid"] for h in hydrated}
         for pmid in state.get("pmids", []):
             if pmid in known:
@@ -219,7 +220,9 @@ class MiningWorkflow:
             try:
                 doc = self.ports.hydrate.hydrate(pmid)
             except Exception as exc:
-                raise WorkflowStepError(f"hydrate failed for {pmid}: {exc}") from exc
+                logger.warning("hydrate failed for %s (skipped): %s", pmid, exc)
+                failed_hydrations.append(pmid)
+                continue
             if doc is None:
                 continue
             stored = doc_repo.upsert_document(doc.document)
@@ -237,7 +240,11 @@ class MiningWorkflow:
                     "fulltext_available": doc.fulltext_available,
                 }
             )
-        return {"hydrated": hydrated}
+        output = {"hydrated": hydrated}
+        if failed_hydrations:
+            output["failed_hydrations"] = failed_hydrations
+            logger.warning("hydrate skipped %d/%d PMIDs due to errors", len(failed_hydrations), len(failed_hydrations) + len(hydrated))
+        return output
 
     def _step_screen(self, state: dict, task: Task) -> dict:
         criteria = task.request.get("screen_criteria")
