@@ -31,3 +31,5 @@ out/
 .claude/
 CLAUDE.md
 PubMiner_生物医学证据Agent完整设计文档_v1.3.md
+docs/adr/
+.zcodeignore
