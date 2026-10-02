@@ -1,0 +1,36 @@
+{
+  "name": "biomarker",
+  "display": "Biomarker Evidence Extraction",
+  "entity_label": "biomarker",
+  "default_task": "prognostic_biomarker",
+  "entity_types": {
+    "GENE": "gene",
+    "PROTEIN": "protein",
+    "CLINICAL_MARKER": "clinical_marker",
+    "METABOLITE": "metabolite",
+    "OTHER": "other"
+  },
+  "predicates": {
+    "prognostic": "PROGNOSTIC",
+    "diagnostic": "DIAGNOSTIC",
+    "predictive": "PREDICTIVE",
+    "therapeutic": "THERAPEUTIC"
+  },
+  "directions": ["HIGH", "LOW", "OVEREXPRESSION", "UNDEREXPRESSION", "AMPLIFICATION", "DELETION", "MUTATION", "POSITIVE", "NEGATIVE", "UNSPECIFIED"],
+  "outcome_hints": ["overall survival", "disease-free survival", "progression-free survival", "recurrence-free survival", "cancer-specific survival"],
+  "signature_template": "{subject} | {predicate} | {object} | {direction}",
+  "verification": {
+    "p_value_threshold": 0.05,
+    "iv_min_documents": 3
+  },
+  "screen_hints": "prognostic biomarker, independent cohort validation preferred",
+  "extraction_fields_schema": null,
+  "export_mappings": {
+    "cbd": {
+      "PROGNOSTIC": "Prognosis",
+      "DIAGNOSTIC": "Diagnosis",
+      "PREDICTIVE": "Prediction",
+      "THERAPEUTIC": "Treatment"
+    }
+  }
+}

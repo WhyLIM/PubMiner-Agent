@@ -1,0 +1,26 @@
+{
+  "name": "drug-target",
+  "display": "Drug-Target Interaction Extraction",
+  "entity_label": "drug-target interaction",
+  "default_task": "drug_target_interaction",
+  "entity_types": {
+    "DRUG": "drug",
+    "TARGET": "target_protein",
+    "PATHWAY": "pathway",
+    "OTHER": "other"
+  },
+  "predicates": {
+    "inhibits": "INHIBITS",
+    "activates": "ACTIVATES",
+    "binds": "BINDS",
+    "modulates": "MODULATES"
+  },
+  "directions": ["AGONIST", "ANTAGONIST", "INHIBITOR", "ACTIVATOR", "UNSPECIFIED"],
+  "outcome_hints": ["IC50", "EC50", "Ki", "binding affinity", "dose response"],
+  "signature_template": "{subject} | {predicate} | {object}",
+  "verification": {
+    "p_value_threshold": 0.05,
+    "iv_min_documents": 2
+  },
+  "screen_hints": "drug-target interaction, binding affinity, pharmacological modulation"
+}

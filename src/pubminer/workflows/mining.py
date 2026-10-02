@@ -45,21 +45,6 @@ _STATUS_BY_STEP = {
     "AGGREGATE": TaskStatus.REVIEW_READY,
 }
 
-_ROLE_TO_PREDICATE = {
-    "prognostic": Predicate.PROGNOSTIC,
-    "diagnostic": Predicate.DIAGNOSTIC,
-    "predictive": Predicate.PREDICTIVE,
-}
-
-_ENTITY_TYPE_BY_BIOMARKER = {
-    "GENE": EntityType.GENE,
-    "PROTEIN": EntityType.PROTEIN,
-    "DISEASE": EntityType.DISEASE,
-    "CLINICAL_MARKER": EntityType.OTHER,
-    "METABOLITE": EntityType.OTHER,
-    "OTHER": EntityType.OTHER,
-}
-
 _SOURCE_BY_NAMESPACE = {
     "NCBIGene": IdentifierSource.NCBI_GENE_RESOLVER,
     "MESH": IdentifierSource.MESH_RESOLVER,
@@ -102,17 +87,22 @@ class MiningWorkflow:
         claim_repo_factory,
         entity_repo_factory,
         task_repo: TaskRepository,
+        domain=None,
         pipeline_release: str = "mvp-0.1:fake",
         max_step_attempts: int = 2,
     ) -> None:
         """
         repo_factory(session) -> repository；由 API/worker 装配层注入。
+        domain 定义研究领域（谓词/方向/签名模板等），缺省为 biomarker。
         """
+        from pubminer.workflows.domain_schema import load_domain_by_name
+
         self.ports = ports
         self.document_repo_factory = document_repo_factory
         self.claim_repo_factory = claim_repo_factory
         self.entity_repo_factory = entity_repo_factory
         self.task_repo = task_repo
+        self.domain = domain or load_domain_by_name("biomarker")
         self.pipeline_release = pipeline_release
         self.max_step_attempts = max_step_attempts
 
@@ -354,9 +344,10 @@ class MiningWorkflow:
         for extraction in state.get("extractions", []):
             mention = extraction["biomarker_mention"]
             mention_type = (extraction.get("biomarker_type") or "GENE").upper()
+            entity_type = self.domain.entity_types.get(mention_type, "OTHER")
             if mention not in cache:
                 try:
-                    candidates, needs_review = self.ports.normalize.resolve(mention, mention_type)
+                    candidates, needs_review = self.ports.normalize.resolve(mention, entity_type)
                 except Exception as exc:
                     raise WorkflowStepError(f"normalize failed for {mention}: {exc}") from exc
                 cache[mention] = {
@@ -375,7 +366,7 @@ class MiningWorkflow:
             if mention in done:
                 continue
             evidence = _extraction_model(extraction)
-            signature = _provisional_signature(evidence, state)
+            signature = _provisional_signature(evidence, state, domain=self.domain)
             try:
                 result = self.ports.verify.verify(signature, evidence)
             except Exception as exc:
@@ -533,7 +524,7 @@ class MiningWorkflow:
                 continue
             verified_mentions.add(mention)
             evidence = _extraction_model(extraction)
-            signature = _provisional_signature(evidence, state)
+            signature = _provisional_signature(evidence, state, domain=self.domain)
             try:
                 result = self.ports.verify.verify(signature, evidence)
             except Exception as exc:
@@ -558,7 +549,7 @@ class MiningWorkflow:
         for extraction in state.get("extractions", []):
             evidence = _extraction_model(extraction)
             resolution = self._resolution_for(state, extraction["biomarker_mention"])
-            signature = _provisional_signature(evidence, state, resolution)
+            signature = _provisional_signature(evidence, state, resolution, domain=self.domain)
             clusters.setdefault(signature, []).append((extraction, resolution))
 
         # 疾病归一化：将 disease mention 解析为 MeSH，聚合同一疾病的不同写法
@@ -618,7 +609,7 @@ class MiningWorkflow:
                 evidence_rows.append(domain_evidence)
             # 独立验证自动检测：同一结论在 ≥2 篇不同文献中同向成立
             distinct_docs = {e.document_id for e in evidence_rows}
-            if len(distinct_docs) >= 3:
+            if len(distinct_docs) >= self.domain.iv_min_documents:
                 for e in evidence_rows:
                     e.study.independent_validation = True
             stored = claims_repo.create_candidate_claim(claim, evidence_rows)
@@ -686,13 +677,13 @@ class MiningWorkflow:
         实体并把证据标记 needs_review，绝不编造 identifier（ADR-006）。
         """
         mention_type = (evidence.biomarker_type or "GENE").upper()
-        entity_type = _ENTITY_TYPE_BY_BIOMARKER.get(mention_type, EntityType.OTHER)
+        entity_type_enum = EntityType.__members__.get(mention_type, EntityType.OTHER)
         if not resolution or not resolution.get("candidates"):
             placeholder = entity_repo.find_by_canonical_name(
-                evidence.biomarker_mention, entity_type=entity_type.value
+                evidence.biomarker_mention, entity_type=entity_type_enum.value
             ) or entity_repo.create_entity(
                 Entity(
-                    type=entity_type,
+                    type=entity_type_enum,
                     canonical_name=evidence.biomarker_mention,
                     ontology_version="mvp-2026",
                     aliases=[EntityAlias(alias=evidence.biomarker_mention, is_canonical=True)],
@@ -711,7 +702,7 @@ class MiningWorkflow:
             return existing, False
         return entity_repo.create_entity(
             Entity(
-                type=entity_type,
+                type=entity_type_enum,
                 canonical_name=top.get("name") or evidence.biomarker_mention,
                 ontology_version=ontology_version,
                 aliases=[EntityAlias(alias=evidence.biomarker_mention)],
@@ -737,7 +728,8 @@ class MiningWorkflow:
                 if candidate.value == evidence.direction.upper():
                     direction = candidate
                     break
-        predicate = _ROLE_TO_PREDICATE.get(evidence.role, Predicate.ASSOCIATED)
+        predicate_str = self.domain.predicate_for_role(evidence.role)
+        predicate = Predicate(predicate_str)
         claim = Claim(
             subject_entity_id=subject_entity.id,
             predicate=predicate,
@@ -756,7 +748,8 @@ def _extraction_model(payload: dict):
 
 
 def _provisional_signature(
-    evidence, state: dict, resolution: dict | None = None
+    evidence, state: dict, resolution: dict | None = None,
+    domain=None,
 ) -> str:
     """聚类键：resolver identifier（可用时）+ role + disease + direction。"""
     subject = "UNRESOLVED"
@@ -765,6 +758,9 @@ def _provisional_signature(
         if identifier:
             subject = identifier.upper()
     direction = (evidence.direction or "UNSPECIFIED").upper()
-    predicate = _ROLE_TO_PREDICATE.get(evidence.role, Predicate.ASSOCIATED).value
+    if domain is not None:
+        predicate_str = domain.predicate_for_role(evidence.role)
+    else:
+        predicate_str = evidence.role.upper() if evidence.role else "ASSOCIATED"
     disease = (evidence.disease_mention or "UNSPECIFIED").upper().replace(" ", "_")
-    return f"{subject} | {predicate} | {disease} | {direction}"
+    return f"{subject} | {predicate_str} | {disease} | {direction}"
