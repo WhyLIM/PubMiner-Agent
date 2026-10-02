@@ -128,13 +128,6 @@ class LlmExtractPort:
             items: list[_Item] = []
             study_context: _StudyContext | None = None
 
-        def _repair_out_model():
-            from pydantic import BaseModel as _BM
-
-            class _RepairOut(_BM):
-                evidence_span: str
-            return _RepairOut
-
         prompt = self.prompts.get("extraction/biomarker", "v1")
         response = self.llm.structured_generate(
             LLMRequest(
