@@ -321,3 +321,17 @@ class AnswerRequest(BaseModel):
 
 class SaveSearchIntentsRequest(BaseModel):
     search_intents: list[SearchIntentItem] = Field(min_length=1)
+
+
+class GenerateSchemaRequest(BaseModel):
+    description: str = Field(..., min_length=5, description="研究领域的自然语言描述")
+
+
+class SaveSchemasRequest(BaseModel):
+    domain: dict[str, Any] = Field(..., description="领域定义 JSON")
+    extraction_fields: dict[str, Any] = Field(default_factory=dict, description="抽取字段 JSON")
+
+
+class GeneratedSchemaResponse(BaseModel):
+    domain: dict[str, Any] = Field(default_factory=dict)
+    extraction_fields: dict[str, Any] = Field(default_factory=dict)

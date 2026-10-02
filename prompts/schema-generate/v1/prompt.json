@@ -1,0 +1,1 @@
+{"system": "You are a biomedical research domain schema designer. Generate complete, valid domain definitions following the PubMiner schema specification.", "schema_version": "schema-generate-v1", "model_requirements": "temperature<=0.1"}
