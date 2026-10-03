@@ -3,6 +3,9 @@
  *
  * 生命周期：App.vue 挂载时调 init() 加载已有 session 和 claims。
  * 各视图通过 computed 消费状态，通过 actions 触发管线。
+ *
+ * 运行期：runSession/createAndRunSession 启动管线后进入轮询
+ * （3s 间隔拉取 task 步骤状态 + 事件流），直至终态后刷新全部数据。
  */
 import { computed, ref } from 'vue';
 import {
@@ -16,6 +19,11 @@ import {
 } from '@/api/client';
 
 const SESSION_KEY = 'pubminer-session-id';
+
+/** 轮询间隔 (ms) */
+const POLL_INTERVAL = 3000;
+/** 管线终态：到达即停止轮询 */
+const TERMINAL_STATUSES = new Set(['COMPLETED', 'PARTIAL', 'REVIEW_READY', 'FAILED', 'CANCELLED']);
 
 const sessionId = ref<string | null>(localStorage.getItem(SESSION_KEY));
 const session = ref<SessionResource | null>(null);
@@ -34,19 +42,52 @@ const coverage = ref<{
   no_effect_count: number;
   independent_validation_found: boolean;
   unresolved_gaps: string[];
+  recommended_next_action?: string | null;
 } | null>(null);
 
+// ---- 运行期轮询状态（跨视图共享，AgentWorkflowView 直接消费） ----
+const runningTaskId = ref<string | null>(null);
+const taskStatus = ref<string | null>(null);
+const taskSteps = ref<Array<{ index: number; type: string; status: string; error: string | null; output_summary?: Record<string, unknown> | null }>>([]);
+const lastEventSeq = ref(0);
+
+let pollHandle: ReturnType<typeof setInterval> | null = null;
+let pollInFlight = false;
+
 const activeTab = ref('literature');
+
+/** 规范签名格式: "MESH:C024903 | PROGNOSTIC | COLORECTAL_CANCER | HIGH" */
+function parseSignature(sig: string) {
+  const parts = sig.split(' | ');
+  return {
+    subject: parts[0] ?? 'Unknown',
+    predicate: parts[1] ?? 'ASSOCIATED',
+    object: parts[2] ?? 'Unknown',
+    direction: parts[3] ?? '',
+  };
+}
+
+/** subject 优先使用后端解析出的实体名；否则保留本体编号前缀 */
+function prettySubject(subject: string, subjectName?: string): string {
+  if (subjectName) { return subjectName; }
+  return subject.replace(/^MESH:/, 'MeSH:').replace(/^NCBIGENE:/, 'Gene:').replace(/^UNRESOLVED$/, 'Unresolved');
+}
+
+function directionSuffix(direction: string): string {
+  return direction && direction !== 'UNSPECIFIED' ? ` (${direction})` : '';
+}
 
 /** 将后端 claims + aggregations 转换为 UI 展示用的文献卡片数据 */
 const papers = computed(() => {
   return aggregations.value.map(agg => {
+    const sig = parseSignature(agg.canonical_signature);
+    const subjectLabel = prettySubject(sig.subject, agg.subject_name);
     const claim = claims.value.find(c => c.claim_id === agg.claim_id);
     return {
       id: agg.claim_id,
       pmid: agg.claim_id.slice(0, 8),
       doi: '',
-      title: agg.canonical_signature,
+      title: `${subjectLabel} — ${sig.predicate}${directionSuffix(sig.direction)} — ${sig.object}`,
       journal: '',
       year: 0,
       authors: '',
@@ -74,39 +115,51 @@ const papers = computed(() => {
       sampleSize: agg.distinct_documents,
       hazardRatio: '' as string,
       pValue: '' as string,
+      // 复核乐观锁需要的真实 claim 版本（reviewQueue 提供）
+      claimVersion: claimVersions.value.get(agg.claim_id) ?? 1,
     };
   });
 });
 
-const graphNodes = computed(() => {
-  const nodes: Array<{ id: string; name: string; category: 0 | 1 | 2 | 3; symbolSize: number; value: number }> = [];
-  const seen = new Set<string>();
-  for (const agg of aggregations.value) {
-    const parts = agg.canonical_signature.split(' | ');
-    const subject = parts[0]?.replace(/^NCBIGENE:/, 'Gene:').replace(/^UNRESOLVED$/, 'Unresolved') ?? 'Unknown';
-    const object = parts[2] ?? 'Unknown';
-    for (const name of [subject, object]) {
-      if (seen.has(name)) { continue; }
-      seen.add(name);
-      nodes.push({
-        id: name,
-        name,
-        category: name.startsWith('Gene:') ? 0 as const : 1 as const,
-        symbolSize: Math.min(60, 15 + (agg.support_count + agg.contradict_count + agg.no_effect_count + agg.uncertain_count) * 4),
-        value: (agg.support_count + agg.contradict_count + agg.no_effect_count + agg.uncertain_count),
-      });
-    }
+/** claim_id → 当前版本号（来自复核队列；用于乐观锁提交） */
+const claimVersions = computed(() => {
+  const map = new Map<string, number>();
+  for (const item of reviewQueue.value) {
+    map.set(item.claim_id, item.version);
   }
-  return nodes;
+  return map;
+});
+
+const graphNodes = computed(() => {
+  // category 0: 生物标志物 (subject)；category 1: 疾病/临床结局 (object)
+  const valueOf = new Map<string, number>();
+  const nameOf = new Map<string, { name: string; category: 0 | 1 }>();
+  for (const agg of aggregations.value) {
+    const sig = parseSignature(agg.canonical_signature);
+    const subject = prettySubject(sig.subject, agg.subject_name);
+    const object = sig.object;
+    const weight = agg.support_count + agg.contradict_count + agg.no_effect_count + agg.uncertain_count;
+    nameOf.set(subject, { name: subject, category: 0 });
+    nameOf.set(object, { name: object, category: 1 });
+    valueOf.set(subject, (valueOf.get(subject) ?? 0) + weight);
+    valueOf.set(object, (valueOf.get(object) ?? 0) + weight);
+  }
+  return [...nameOf.values()].map(({ name, category }) => ({
+    id: name,
+    name,
+    category,
+    symbolSize: Math.min(60, 15 + (valueOf.get(name) ?? 0) * 2),
+    value: valueOf.get(name) ?? 0,
+  }));
 });
 
 const graphLinks = computed(() => {
   return aggregations.value.map(agg => {
-    const parts = agg.canonical_signature.split(' | ');
+    const sig = parseSignature(agg.canonical_signature);
     return {
-      source: parts[0]?.replace(/^NCBIGENE:/, 'Gene:') ?? 'Unknown',
-      target: parts[2] ?? 'Unknown',
-      relation: parts[1] ?? 'ASSOCIATED',
+      source: prettySubject(sig.subject, agg.subject_name),
+      target: sig.object,
+      relation: `${sig.predicate}${directionSuffix(sig.direction)}`,
       weight: (agg.support_count + agg.contradict_count + agg.no_effect_count + agg.uncertain_count),
       evidenceCount: (agg.support_count + agg.contradict_count + agg.no_effect_count + agg.uncertain_count),
     };
@@ -129,6 +182,10 @@ const statCards = computed(() => {
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function clearError() {
+  error.value = null;
 }
 
 async function init() {
@@ -183,6 +240,76 @@ async function refreshCoverage() {
   } catch { /* ignore */ }
 }
 
+async function refreshAll() {
+  await Promise.all([
+    refreshSession(),
+    refreshClaims(),
+    refreshAggregations(),
+    refreshQueue(),
+    refreshTasks(),
+    refreshCoverage(),
+  ]);
+}
+
+// ------------------------------------------------------------------ 轮询
+
+async function pollOnce(taskId: string): Promise<boolean> {
+  // 返回 true 表示已到终态
+  if (pollInFlight) { return false; }
+  pollInFlight = true;
+  try {
+    const detail = await agentApi.getTask(taskId);
+    taskStatus.value = detail.status;
+    taskSteps.value = detail.steps;
+    if (sessionId.value) {
+      const res = await agentApi.fetchEvents(sessionId.value, lastEventSeq.value);
+      if (res.events.length) {
+        events.value = [...events.value, ...res.events].slice(-500);
+        lastEventSeq.value = res.next_since;
+      }
+    }
+    if (TERMINAL_STATUSES.has(detail.status)) {
+      stopPolling();
+      await refreshAll();
+      return true;
+    }
+    return false;
+  } catch {
+    return false; // 单次失败不中断轮询
+  } finally {
+    pollInFlight = false;
+  }
+}
+
+function startPolling(taskId: string) {
+  stopPolling();
+  runningTaskId.value = taskId;
+  lastEventSeq.value = 0;
+  events.value = [];
+  void pollOnce(taskId);
+  pollHandle = setInterval(() => { void pollOnce(taskId); }, POLL_INTERVAL);
+}
+
+function stopPolling() {
+  if (pollHandle !== null) {
+    clearInterval(pollHandle);
+    pollHandle = null;
+  }
+}
+
+/** 运行指定会话并轮询至终态（不负责创建/批准计划） */
+async function runAndWait(sessionIdValue: string, body: Parameters<typeof agentApi.runSession>[1]) {
+  const task = await agentApi.runSession(sessionIdValue, body);
+  startPolling(task.task_id);
+  // 等待轮询至终态（pollOnce 内部到终态会 stopPolling + refreshAll）
+  while (pollHandle !== null && runningTaskId.value === task.task_id) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+  }
+  return task;
+}
+
+// ------------------------------------------------------------------ 动作
+
 async function createAndRunSession(goal: string, disease?: string) {
   loading.value = true;
   error.value = null;
@@ -207,23 +334,12 @@ async function createAndRunSession(goal: string, disease?: string) {
     });
     await agentApi.approvePlan(created.session_id, plan.plan_version);
 
-    // Run mining
-    const task = await agentApi.runSession(created.session_id, {
+    // Run mining + poll to terminal state
+    const task = await runAndWait(created.session_id, {
       disease: disease || (specFields.disease as string) || null,
       task: 'prognostic_biomarker',
       max_results: 50,
     });
-
-    // Wait and refresh all data
-    await agentApi.getTask(task.task_id);
-    await Promise.all([
-      refreshSession(),
-      refreshClaims(),
-      refreshAggregations(),
-      refreshQueue(),
-      refreshTasks(),
-      refreshCoverage(),
-    ]);
     return task;
   } catch (err) {
     error.value = describe(err);
@@ -261,9 +377,11 @@ export function useResearch() {
     sessionId, session, claims, aggregations, reviewQueue, tasks,
     evidenceSpans, selectedClaimId, loading, error, events, coverage,
     activeTab,
-    papers, graphNodes, graphLinks, statCards,
+    papers, graphNodes, graphLinks, statCards, claimVersions,
+    runningTaskId, taskStatus, taskSteps,
     init, createAndRunSession, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
-    refreshSession, refreshCoverage,
+    refreshSession, refreshCoverage, refreshAll,
+    startPolling, stopPolling, runAndWait, clearError,
   };
 }

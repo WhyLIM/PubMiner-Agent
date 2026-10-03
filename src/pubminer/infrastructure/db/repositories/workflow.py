@@ -117,6 +117,7 @@ class TaskRepository:
                 "type": r.step_type,
                 "status": r.status,
                 "error": r.error,
+                "output_summary": dict(r.output_summary or {}),
             }
             for r in rows
         ]

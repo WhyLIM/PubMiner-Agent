@@ -115,6 +115,7 @@ class TaskStepResponse(BaseModel):
     type: str
     status: str
     error: str | None = None
+    output_summary: dict | None = None
 
 
 class TaskResponse(BaseModel):
@@ -197,6 +198,7 @@ class AggregationItem(BaseModel):
     needs_review: bool = False
     distinct_documents: int = 0
     reasons: list[str] = Field(default_factory=list)
+    subject_name: str = ""
 
 
 class CoverageQuestionItem(BaseModel):

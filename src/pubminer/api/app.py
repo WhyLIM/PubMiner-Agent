@@ -388,10 +388,21 @@ def create_app(container: Container) -> FastAPI:
         from pubminer.workflows.verification import CrossPaperVerifier
 
         with session_scope(container.session_factory) as session:
-            verifier = CrossPaperVerifier(container.claim_repository(session))
-            return schemas.AggregationsResponse(
-                aggregations=[schemas.AggregationItem(**agg.to_dict()) for agg in verifier.aggregate(session, limit=limit)]
-            )
+            claim_repo = container.claim_repository(session)
+            entity_repo = container.entity_repository(session)
+            verifier = CrossPaperVerifier(claim_repo)
+            aggregations = verifier.aggregate(session, limit=limit)
+            # 批量解析 subject 实体名（签名中只有本体编号，图谱/卡片需要可读名称）
+            items: list[schemas.AggregationItem] = []
+            for agg in aggregations:
+                payload = agg.to_dict()
+                claim = claim_repo.get(agg.claim_id)
+                if claim is not None and claim.subject_entity_id:
+                    entity = entity_repo.get(claim.subject_entity_id)
+                    if entity is not None:
+                        payload["subject_name"] = entity.canonical_name
+                items.append(schemas.AggregationItem(**payload))
+            return schemas.AggregationsResponse(aggregations=items)
 
     @app.get("/api/v1/agent/sessions/{session_id}/coverage")
     def session_coverage(session_id: str) -> schemas.CoverageResponse:

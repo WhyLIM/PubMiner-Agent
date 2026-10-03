@@ -83,7 +83,7 @@
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item command="markdown">导出综述报告 (.md)</el-dropdown-item>
-            <el-dropdown-item command="bibtex">导出文献 BibTeX (.bib)</el-dropdown-item>
+            <el-dropdown-item command="csv">导出命题清单 (.csv)</el-dropdown-item>
             <el-dropdown-item command="json">导出三元组图谱 (.json)</el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -123,7 +123,7 @@ const emit = defineEmits<{
   (e: 'update:activeTab', tab: string): void;
   (e: 'select-topic', topicId: string): void;
   (e: 'trigger-agent'): void;
-  (e: 'export-report', format: 'markdown' | 'bibtex' | 'json'): void;
+  (e: 'export-report', format: 'markdown' | 'csv' | 'json'): void;
 }>();
 
 const navItems = computed(() => [
@@ -144,6 +144,6 @@ function handleSelectTopic(command: string) {
 }
 
 function handleExport(command: string) {
-  emit('export-report', command as 'markdown' | 'bibtex' | 'json');
+  emit('export-report', command as 'markdown' | 'csv' | 'json');
 }
 </script>

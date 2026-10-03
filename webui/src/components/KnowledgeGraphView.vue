@@ -7,10 +7,8 @@
         <div class="flex items-center gap-3 flex-wrap">
           <span class="text-xs font-semibold text-slate-700">实体类型过滤:</span>
           <div class="flex items-center gap-2">
-            <el-checkbox v-model="visibleCategories[0]" label="靶点/基因" size="small" />
-            <el-checkbox v-model="visibleCategories[1]" label="疾病/适应症" size="small" />
-            <el-checkbox v-model="visibleCategories[2]" label="药物/化合物" size="small" />
-            <el-checkbox v-model="visibleCategories[3]" label="信号通路" size="small" />
+            <el-checkbox v-model="visibleCategories[0]" label="生物标志物 (Subject)" size="small" />
+            <el-checkbox v-model="visibleCategories[1]" label="疾病/临床结局 (Object)" size="small" />
           </div>
         </div>
 
@@ -54,7 +52,11 @@
     </div>
 
     <!-- Main Graph Canvas & Inspector Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+    <el-empty
+      v-if="props.nodes.length === 0"
+      description="暂无图谱数据：先在文献页/工作台运行一次挖掘管线，聚合命题将构成实体关系图谱。"
+    />
+    <div v-else class="grid grid-cols-1 lg:grid-cols-4 gap-4">
       <!-- ECharts Graph Container -->
       <div class="lg:col-span-3 bg-white rounded-lg border border-slate-200 p-2 shadow-xs relative">
         <div ref="chartContainer" class="w-full h-[580px] rounded"></div>
@@ -64,19 +66,11 @@
           <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">节点图例 (Node Types)</div>
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-[#0284c7]"></span>
-            <span class="text-slate-700">靶点 / 驱动基因</span>
+            <span class="text-slate-700">生物标志物 / Subject</span>
           </div>
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-[#e11d48]"></span>
-            <span class="text-slate-700">疾病 / 病理适应症</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#059669]"></span>
-            <span class="text-slate-700">药物 / 抑制剂</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#d97706]"></span>
-            <span class="text-slate-700">生物通路 / 机制</span>
+            <span class="text-slate-700">疾病 / 临床结局 (Object)</span>
           </div>
         </div>
       </div>
@@ -100,12 +94,12 @@
           <!-- Centrality & Metric Badges -->
           <div class="bg-slate-50 rounded p-3 border border-slate-100 text-xs space-y-1.5">
             <div class="flex justify-between">
-              <span class="text-slate-400">网络介数中心度:</span>
-              <span class="font-mono font-bold text-slate-800">{{ selectedNode.value }} / 100</span>
+              <span class="text-slate-400">关联证据强度:</span>
+              <span class="font-mono font-bold text-slate-800">{{ selectedNode.value }}</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-slate-400">直接关联度 (Degree):</span>
-              <span class="font-mono font-bold text-sky-700">{{ connectedEdges.length }} 条语义连边</span>
+              <span class="text-slate-400">直接关联 (Degree):</span>
+              <span class="font-mono font-bold text-sky-700">{{ connectedEdges.length }} 条关系边</span>
             </div>
           </div>
 
@@ -123,8 +117,8 @@
                   <span class="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1 rounded">{{ edge.relation }}</span>
                 </div>
                 <div class="flex justify-between text-[11px] text-slate-400 font-mono">
-                  <span>支持文献数:</span>
-                  <span>{{ edge.evidenceCount }} 篇</span>
+                  <span>证据条数:</span>
+                  <span>{{ edge.evidenceCount }} 条</span>
                 </div>
               </div>
             </div>
@@ -159,19 +153,17 @@ const props = defineProps<{
 const chartContainer = ref<HTMLDivElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
 
-const visibleCategories = ref([true, true, true, true]);
+const visibleCategories = ref([true, true]);
 const minWeight = ref(0);
 const searchKeyword = ref('');
 const selectedNode = ref<GraphNode | null>(null);
 
-const categoryColors = ['#0284c7', '#e11d48', '#059669', '#d97706'];
+const categoryColors = ['#0284c7', '#e11d48'];
 
 function getCategoryName(category: number) {
   switch (category) {
-    case 0: return '靶点 / 驱动基因';
-    case 1: return '疾病 / 适应症';
-    case 2: return '药物 / 化合物';
-    case 3: return '生物通路 / 机制';
+    case 0: return '生物标志物 (Subject)';
+    case 1: return '疾病/临床结局 (Object)';
     default: return '生物实体';
   }
 }
@@ -250,7 +242,7 @@ function updateChart() {
     return {
       source: link.source,
       target: link.target,
-      value: 0,
+      value: link.weight,
       lineStyle: {
         width: Math.max(1, link.weight / 2.5),
         curveness: 0.15,
@@ -281,7 +273,7 @@ function updateChart() {
         } else if (params.dataType === 'edge') {
           return `<div class="font-sans text-xs">
             <div class="font-bold text-slate-800">${params.data.source} ➔ ${params.data.target}</div>
-            <div class="text-slate-600 mt-0.5">语义关系: <span class="font-mono text-sky-600">${params.data.value}</span></div>
+            <div class="text-slate-600 mt-0.5">关联证据强度: <span class="font-mono text-sky-600">${params.data.value}</span></div>
           </div>`;
         }
         return '';
@@ -294,10 +286,8 @@ function updateChart() {
         data: chartNodes,
         links: chartLinks,
         categories: [
-          { name: '靶点/基因' },
-          { name: '疾病/适应症' },
-          { name: '药物/化合物' },
-          { name: '信号通路' }
+          { name: '生物标志物 (Subject)' },
+          { name: '疾病/临床结局 (Object)' }
         ],
         roam: true,
         draggable: true,

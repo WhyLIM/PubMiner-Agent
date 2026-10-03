@@ -31,6 +31,7 @@ class ClaimAggregation:
     needs_review: bool = False
     distinct_documents: int = 0
     reasons: list[str] = field(default_factory=list)
+    subject_name: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -46,6 +47,7 @@ class ClaimAggregation:
             "needs_review": self.needs_review,
             "distinct_documents": self.distinct_documents,
             "reasons": self.reasons,
+            "subject_name": self.subject_name,
         }
 
 

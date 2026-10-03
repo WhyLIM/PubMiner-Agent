@@ -46,6 +46,8 @@ export interface Paper {
   uncertainCount?: number;
   independentValidation?: boolean;
   evidenceCount?: number;
+  /** 复核乐观锁所需的真实 claim 版本号 */
+  claimVersion?: number;
 }
 
 export interface GraphNode {

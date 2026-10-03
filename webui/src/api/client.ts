@@ -112,6 +112,7 @@ export interface AggregationItem {
   needs_review: boolean;
   distinct_documents: number;
   reasons: string[];
+  subject_name?: string;
 }
 
 export class AgentApiError extends Error {
@@ -261,7 +262,13 @@ export const agentApi = {
     request<{
       task_id: string;
       status: string;
-      steps: Array<{ index: number; type: string; status: string; error: string | null }>;
+      steps: Array<{
+        index: number;
+        type: string;
+        status: string;
+        error: string | null;
+        output_summary?: Record<string, unknown> | null;
+      }>;
     }>(`/api/v1/tasks/${taskId}`),
 
   listTasks: (limit = 20) =>

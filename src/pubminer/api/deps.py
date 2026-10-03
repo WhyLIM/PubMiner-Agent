@@ -174,6 +174,11 @@ class Container:
     def claim_repository(self, session: Session) -> ClaimRepository:
         return ClaimRepository(session)
 
+    def entity_repository(self, session: Session):
+        from pubminer.infrastructure.db.repositories.entities import EntityRepository
+
+        return EntityRepository(session)
+
 
 def build_container(
     db_url: str | None = None,

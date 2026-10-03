@@ -4,13 +4,13 @@
     <div class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
       <div>
         <div class="flex items-center gap-2">
-          <h2 class="text-base font-bold text-slate-900">系统性证据合成与学术综述报告</h2>
+          <h2 class="text-base font-bold text-slate-900">系统性证据合成与综述报告</h2>
           <span class="text-xs px-2 py-0.5 rounded bg-sky-50 text-sky-700 font-mono font-medium">
-            AI Automated Review
+            Evidence-grounded Review
           </span>
         </div>
         <p class="text-xs text-slate-500 mt-0.5">
-          基于提取的高置信度三元组关系与临床试验循证终点自动编纂的学术综述初稿。
+          报告与问答均由当前会话的真实聚合命题与证据原文片段生成；所有结论可溯源至文献原文片段。
         </p>
       </div>
 
@@ -25,18 +25,17 @@
         </el-button>
         <el-button size="small" @click="activeRightTab = activeRightTab === 'chat' ? 'none' : 'chat'">
           <el-icon class="mr-1"><ChatDotRound /></el-icon>
-          {{ activeRightTab === 'chat' ? '隐藏文献对话' : '文献溯源问答' }}
+          {{ activeRightTab === 'chat' ? '隐藏证据问答' : '证据溯源问答' }}
         </el-button>
       </div>
     </div>
 
-    <!-- Main Content Area: Split View (Report on Left, Interactive Grounded QA on Right) -->
+    <!-- Main Content Area: Split View -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <!-- Structured Report Article (2 Cols or 3 Cols) -->
+      <!-- Structured Report Article -->
       <div :class="[activeRightTab === 'chat' ? 'lg:col-span-2' : 'lg:col-span-3', 'bg-white rounded-lg border border-slate-200 p-6 sm:p-8 shadow-xs']">
         <article class="prose prose-slate max-w-none text-slate-800 text-sm leading-relaxed">
-          <!-- Render report with clean typography and styled sections -->
-          <div class="whitespace-pre-line font-sans">
+          <div class="font-sans">
             <template v-for="(paragraph, idx) in formattedSections" :key="idx">
               <div v-if="paragraph.type === 'h1'" class="text-xl sm:text-2xl font-bold text-slate-900 border-b border-slate-200 pb-3 mb-4 mt-2">
                 {{ paragraph.text }}
@@ -48,7 +47,6 @@
                 {{ paragraph.text }}
               </div>
               <div v-else-if="paragraph.type === 'table'" class="my-4 overflow-x-auto">
-                <!-- Render Table -->
                 <table class="w-full text-xs text-left border-collapse border border-slate-200">
                   <thead class="bg-slate-50 text-slate-700">
                     <tr>
@@ -74,25 +72,24 @@
         </article>
       </div>
 
-      <!-- Grounded Citation QA Chat Assistant (Right Col) -->
+      <!-- Grounded Evidence QA (Right Col): local retrieval over real evidence -->
       <div v-if="activeRightTab === 'chat'" class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs flex flex-col justify-between h-[650px]">
-        <!-- Chat Header -->
         <div>
           <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
             <div class="flex items-center gap-2">
               <el-icon class="text-sky-600"><ChatDotRound /></el-icon>
-              <h3 class="text-xs font-bold text-slate-900">PubMiner 文献溯源问答助手</h3>
+              <h3 class="text-xs font-bold text-slate-900">证据溯源问答</h3>
             </div>
-            <span class="text-[11px] text-emerald-600 font-mono font-medium">● Grounded with PMIDs</span>
+            <span class="text-[11px] text-emerald-600 font-mono font-medium">● 本地证据检索 · 可溯源</span>
           </div>
 
-          <!-- Suggested Quick Prompts -->
+          <!-- Suggested Quick Prompts (generated from real data) -->
           <div class="flex flex-wrap gap-1.5 mb-3">
             <button
               v-for="(p, idx) in samplePrompts"
               :key="idx"
               @click="askQuestion(p)"
-              class="px-2 py-1 rounded text-[11px] bg-slate-50 border border-slate-200 text-slate-600 hover:text-sky-700 hover:bg-sky-50 transition-colors text-left"
+              class="px-2 py-1 rounded text-[11px] bg-slate-50 border border-slate-200 text-slate-600 hover:text-sky-700 hover:bg-sky-50 transition-colors text-left line-clamp-1 max-w-full"
             >
               {{ p }}
             </button>
@@ -112,26 +109,24 @@
             ]"
           >
             <div class="font-bold text-[10px] opacity-75 mb-1">
-              {{ msg.sender === 'user' ? '我的提问' : 'PubMiner 科学助手' }}
+              {{ msg.sender === 'user' ? '我的提问' : 'PubMiner 证据助手' }}
             </div>
             <div class="leading-relaxed whitespace-pre-line">{{ msg.text }}</div>
-            <div v-if="msg.citations && msg.citations.length" class="mt-2 pt-2 border-t border-slate-200/50 flex flex-wrap gap-1.5">
-              <span class="text-[10px] text-slate-500 font-sans">引用依据:</span>
-              <a
-                v-for="pmid in msg.citations"
-                :key="pmid"
-                :href="'https://pubmed.ncbi.nlm.nih.gov/' + pmid"
-                target="_blank"
-                class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-sky-100 text-sky-800 hover:bg-sky-200 transition-colors"
+            <div v-if="msg.citations && msg.citations.length" class="mt-2 pt-2 border-t border-slate-200/50 flex flex-wrap gap-1.5 items-center">
+              <span class="text-[10px] text-slate-500 font-sans">依据片段:</span>
+              <span
+                v-for="cite in msg.citations"
+                :key="cite"
+                class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-sky-100 text-sky-800"
               >
-                [PMID: {{ pmid }}]
-              </a>
+                {{ cite }}
+              </span>
             </div>
           </div>
 
           <div v-if="isThinking" class="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-500 flex items-center gap-2">
             <el-icon class="is-loading text-sky-600"><Loading /></el-icon>
-            <span>正在检索文献数据库并进行证据综合...</span>
+            <span>正在检索本地证据库并进行证据综合...</span>
           </div>
         </div>
 
@@ -140,7 +135,7 @@
           <div class="flex gap-2">
             <el-input
               v-model="inputQuestion"
-              placeholder="向文献智能体提问机制或临床试验细节..."
+              placeholder="输入关键词，检索证据库中的相关命题与原文片段..."
               size="small"
               @keyup.enter="handleSendQuestion"
             />
@@ -155,41 +150,107 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { ResearchTopic } from '../types';
 import { ElMessage } from 'element-plus';
+import { agentApi, type EvidenceSpanItem } from '@/api/client';
+import { useResearch } from '@/composables/useResearch';
 
 const props = defineProps<{
   topic: ResearchTopic;
 }>();
+
+const { aggregations, session, coverage } = useResearch();
 
 const activeRightTab = ref<'chat' | 'none'>('chat');
 const inputQuestion = ref('');
 const isThinking = ref(false);
 const chatContainerRef = ref<HTMLDivElement | null>(null);
 
-const samplePrompts = [
-  '奥希替尼耐药后，MET扩增的最佳联合方案是什么？',
-  'C797S顺式与反式突变在用药策略上有何本质区别？',
-  '如何通过液体活检动态监测耐药克隆演变？'
-];
+// ------------------------------------------------------------------ 报告生成（真实数据）
 
-interface ChatMessage {
-  sender: 'user' | 'agent';
-  text: string;
-  citations?: string[];
-}
-
-const messages = ref<ChatMessage[]>([
-  {
-    sender: 'agent',
-    text: `你好！我是 PubMiner 科学问答智能体。已为您加载《${props.topic.title}》的系统挖掘文献库，你可以随时向我咨询相关分子机制、临床数据及试验终点，所有结论均支持追溯 PubMed 原文。`
+const report = computed(() => {
+  const aggs = aggregations.value;
+  if (!aggs.length) {
+    return props.topic.reviewReport || '# 暂无数据\n\n请先在文献页或工作台运行一次挖掘管线。';
   }
-]);
+  const totalSupport = aggs.reduce((s, a) => s + a.support_count, 0);
+  const totalContradict = aggs.reduce((s, a) => s + a.contradict_count, 0);
+  const totalNoEffect = aggs.reduce((s, a) => s + a.no_effect_count, 0);
+  const totalUncertain = aggs.reduce((s, a) => s + a.uncertain_count, 0);
+  const validated = aggs.filter(a => a.independent_validation);
+  const conflicted = aggs.filter(a => a.has_conflict);
+  const totalEvidence = totalSupport + totalContradict + totalNoEffect + totalUncertain;
+  const lines: string[] = [];
+
+  lines.push(`# 证据综述报告：${session.value?.goal ?? props.topic.title}`);
+  lines.push('');
+  lines.push(`> 会话 ${ (session.value?.session_id ?? '').slice(0, 8) || '—' } · 机器生成初稿，须经人工复核后采用。`);
+  lines.push('');
+  lines.push('## 一、证据总览');
+  lines.push('');
+  lines.push(`当前会话共聚合 ${aggs.length} 条命题，累计 ${totalEvidence} 条证据片段：支持 ${totalSupport}、反驳 ${totalContradict}、无效应 ${totalNoEffect}、不确定 ${totalUncertain}。`);
+  lines.push(`其中 ${validated.length} 条命题达到独立验证标准（≥3 篇独立文献同向），${conflicted.length} 条命题存在反驳证据需要重点复核。`);
+  lines.push('');
+
+  // 汇总表（签名中的 | 会破坏 Markdown 表格，转义为全角竖线）
+  const esc = (s: string) => s.replace(/\|/g, '｜');
+  lines.push('| 命题 (规范签名) | 支持 | 反驳 | 无效应 | 不确定 | 独立文献 | 状态 |');
+  lines.push('| --- | --- | --- | --- | --- | --- | --- |');
+  for (const a of aggs.slice(0, 30)) {
+    lines.push(`| ${esc(a.canonical_signature)} | ${a.support_count} | ${a.contradict_count} | ${a.no_effect_count} | ${a.uncertain_count} | ${a.distinct_documents} | ${a.status} |`);
+  }
+  if (aggs.length > 30) {
+    lines.push(`| …其余 ${aggs.length - 30} 条见文献页 | | | | | | |`);
+  }
+  lines.push('');
+
+  // 覆盖度（章节号动态，避免缺省时编号跳跃）
+  let sectionNo = 2;
+  if (coverage.value) {
+    lines.push(`## ${sectionNo}、覆盖度评估 (COVERAGE)`);
+    lines.push('');
+    lines.push(`- 检索覆盖：支持 ${coverage.value.support_count} · 反驳 ${coverage.value.contradict_count}；独立验证${coverage.value.independent_validation_found ? '已达成' : '尚未达成'}。`);
+    if (coverage.value.unresolved_gaps.length) {
+      lines.push('- 未解决缺口：');
+      for (const gap of coverage.value.unresolved_gaps) {
+        lines.push(`  - ${gap}`);
+      }
+    }
+    if (coverage.value.recommended_next_action) {
+      lines.push(`- 推荐下一步：${coverage.value.recommended_next_action}`);
+    }
+    lines.push('');
+    sectionNo += 1;
+  }
+
+  // 命题详情
+  lines.push(`## ${sectionNo}、命题详情`);
+  lines.push('');
+  for (const a of aggs) {
+    lines.push(`### ${a.canonical_signature}`);
+    lines.push('');
+    lines.push(`- 状态：${a.status}；独立文献 ${a.distinct_documents} 篇；${a.independent_validation ? '✅ 独立验证' : '未达独立验证'}${a.has_conflict ? '；⚠️ 存在冲突' : ''}。`);
+    if (a.reasons.length) {
+      lines.push('- 判定理由：');
+      for (const r of a.reasons) {
+        lines.push(`  - ${r}`);
+      }
+    }
+    lines.push('');
+  }
+
+  lines.push(`## ${sectionNo + 1}、使用说明与局限`);
+  lines.push('');
+  lines.push('1. 本报告由 PubMiner Evidence Agent 基于检索、筛选、抽取、归一化、验证与聚合的确定性管线自动生成；');
+  lines.push('2. 所有命题均可展开查看证据原文片段（含偏移定位），请在复核页面逐条确认后再写入下游数据库；');
+  lines.push('3. 抽取与筛选依赖 LLM 与嵌入模型，可能存在漏检/误抽，人工复核是必要环节。');
+  return lines.join('\n');
+});
 
 // Parse Markdown into structured sections for clean display
 const formattedSections = computed(() => {
-  const lines = props.topic.reviewReport.split('\n');
+  const lines = report.value.split('\n');
   const sections: { type: 'h1' | 'h2' | 'h3' | 'p' | 'table'; text?: string; tableData?: any }[] = [];
 
   let inTable = false;
@@ -209,7 +270,6 @@ const formattedSections = computed(() => {
     } else if (line.startsWith('|') && line.endsWith('|')) {
       const cells = line.split('|').slice(1, -1).map(c => c.trim());
       if (cells.every(c => c.includes('---'))) {
-        // Table separator row, ignore
         continue;
       }
       if (!inTable) {
@@ -242,13 +302,154 @@ const formattedSections = computed(() => {
   return sections;
 });
 
+// ------------------------------------------------------------------ 问答（本地证据检索）
+
+interface ChatMessage {
+  sender: 'user' | 'agent';
+  text: string;
+  citations?: string[];
+}
+
+const messages = ref<ChatMessage[]>([
+  {
+    sender: 'agent',
+    text: `你好！我基于当前会话的真实证据库（${aggregations.value.length} 条聚合命题）回答问题。输入关键词（如基因名、药物名、表型），我会检索相关命题并给出可溯源的原文片段。`
+  }
+]);
+
+/** 从真实命题数据生成推荐问题（去重） */
+const samplePrompts = computed(() => {
+  const prompts: string[] = ['当前证据库的总体结论与分歧点'];
+  const seen = new Set<string>();
+  const top = [...aggregations.value]
+    .sort((a, b) => b.support_count - a.support_count)
+    .slice(0, 4);
+  for (const a of top) {
+    const subject = a.subject_name || a.canonical_signature.split(' | ')[0] || '';
+    if (!subject || subject === 'UNRESOLVED' || seen.has(subject)) { continue; }
+    seen.add(subject);
+    prompts.push(`${subject} 的证据支持情况如何？`);
+    if (prompts.length >= 3) { break; }
+  }
+  const conflict = aggregations.value.find(a => a.has_conflict);
+  if (conflict) {
+    const subject = conflict.subject_name || conflict.canonical_signature.split(' | ')[0] || '';
+    if (subject && subject !== 'UNRESOLVED' && !seen.has(subject)) {
+      prompts.push(`${subject} 为什么存在冲突证据？`);
+    }
+  }
+  return prompts.slice(0, 4);
+});
+
+/** 简易打分：问题词与签名/理由的重叠度 */
+function scoreAgg(q: string, sig: string, reasons: string[]): number {
+  const hay = (sig + ' ' + reasons.join(' ')).toLowerCase();
+  const tokens = q.toLowerCase().split(/[\s,，?？。;；:：()（）]+/).filter(t => t.length >= 2);
+  let score = 0;
+  for (const t of tokens) {
+    if (hay.includes(t)) { score += t.length; }
+  }
+  return score;
+}
+
+function bestSpan(evidence: EvidenceSpanItem[]): EvidenceSpanItem | null {
+  return evidence.find(e => e.polarity === 'SUPPORT')
+    ?? evidence.find(e => e.polarity === 'CONTRADICT')
+    ?? evidence[0] ?? null;
+}
+
+async function answerFromEvidence(q: string): Promise<{ text: string; citations: string[] }> {
+  const aggs = aggregations.value;
+  if (!aggs.length) {
+    return { text: '当前会话没有聚合命题。请先在文献页运行一次挖掘管线。', citations: [] };
+  }
+
+  if (q.includes('总体') || q.includes('总结') || q.includes('分歧')) {
+    const validated = aggs.filter(a => a.independent_validation);
+    const conflicted = aggs.filter(a => a.has_conflict);
+    const totalSupport = aggs.reduce((s, a) => s + a.support_count, 0);
+    const totalContradict = aggs.reduce((s, a) => s + a.contradict_count, 0);
+    const lines = [
+      `当前证据库共 ${aggs.length} 条命题：支持证据 ${totalSupport} 条、反驳证据 ${totalContradict} 条。`,
+      validated.length ? `达到独立验证标准（≥3 篇同向）的命题 ${validated.length} 条，例如：${validated.slice(0, 3).map(a => a.canonical_signature).join('；')}。` : '尚无命题达到独立验证标准。',
+      conflicted.length ? `存在反驳证据、需要重点复核的命题 ${conflicted.length} 条，例如：${conflicted.slice(0, 3).map(a => a.canonical_signature).join('；')}。` : '未检测到命题内冲突。',
+    ];
+    return { text: lines.join('\n'), citations: [] };
+  }
+
+  // 常规检索：打分取 top 3
+  const scored = aggs
+    .map(a => ({ a, score: scoreAgg(q, `${a.subject_name ?? ''} ${a.canonical_signature}`, a.reasons) }))
+    .filter(x => x.score > 0)
+    .sort((x, y) => y.score - x.score)
+    .slice(0, 3);
+
+  if (!scored.length) {
+    return {
+      text: `在当前证据库中未找到与"${q}"相关的命题。可尝试换用基因/药物/表型关键词，或先扩大检索范围重跑管线。`,
+      citations: [],
+    };
+  }
+
+  const parts: string[] = [];
+  const citations: string[] = [];
+  for (const { a } of scored) {
+    const header = `【${a.canonical_signature}】支持 ${a.support_count} · 反驳 ${a.contradict_count} · 无效应 ${a.no_effect_count} · 不确定 ${a.uncertain_count}（${a.distinct_documents} 篇独立文献，${a.independent_validation ? '已独立验证' : '未达独立验证'}）`;
+    let spanLine = '';
+    try {
+      const detail = await agentApi.getClaimEvidence(a.claim_id);
+      const span = bestSpan(detail.evidence ?? []);
+      if (span?.span?.text) {
+        spanLine = `\n原文片段（${span.polarity}，${span.span.section_path || '正文'}）："${span.span.text}"`;
+        citations.push(`doc ${span.span.document_version_id.slice(0, 8)} · ${span.span.section_path || 'span'}`);
+      }
+    } catch { /* 拉取失败时仅输出统计 */ }
+    parts.push(header + spanLine);
+  }
+
+  return {
+    text: `在证据库中检索到 ${scored.length} 条相关命题：\n\n` + parts.join('\n\n') + '\n\n以上结论均来自本地证据库原文片段，可在文献页展开复核。',
+    citations,
+  };
+}
+
+function askQuestion(q: string) {
+  inputQuestion.value = q;
+  void handleSendQuestion();
+}
+
+async function handleSendQuestion() {
+  const q = inputQuestion.value.trim();
+  if (!q || isThinking.value) return;
+
+  messages.value.push({ sender: 'user', text: q });
+  inputQuestion.value = '';
+  isThinking.value = true;
+
+  try {
+    const { text, citations } = await answerFromEvidence(q);
+    messages.value.push({ sender: 'agent', text, citations });
+  } catch (err) {
+    messages.value.push({
+      sender: 'agent',
+      text: `检索失败：${err instanceof Error ? err.message : String(err)}`,
+    });
+  } finally {
+    isThinking.value = false;
+    await nextTick();
+    chatContainerRef.value?.scrollTo({ top: chatContainerRef.value.scrollHeight, behavior: 'smooth' });
+  }
+}
+
+// ------------------------------------------------------------------ 导出
+
 function copyReport() {
-  navigator.clipboard.writeText(props.topic.reviewReport);
+  navigator.clipboard.writeText(report.value);
   ElMessage.success('综述报告 Markdown 内容已复制至剪贴板');
 }
 
 function downloadReport() {
-  const blob = new Blob([props.topic.reviewReport], { type: 'text/markdown;charset=utf-8' });
+  const blob = new Blob([report.value], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -256,45 +457,5 @@ function downloadReport() {
   a.click();
   URL.revokeObjectURL(url);
   ElMessage.success('系统性综述报告文件下载成功');
-}
-
-function askQuestion(q: string) {
-  inputQuestion.value = q;
-  handleSendQuestion();
-}
-
-function handleSendQuestion() {
-  if (!inputQuestion.value.trim() || isThinking.value) return;
-
-  const q = inputQuestion.value.trim();
-  messages.value.push({ sender: 'user', text: q });
-  inputQuestion.value = '';
-  isThinking.value = true;
-
-  setTimeout(() => {
-    isThinking.value = false;
-    let answer = '';
-    let citations: string[] = [];
-
-    if (q.includes('MET') || q.includes('联合')) {
-      answer = '根据 SAVANNAH 研究（Lancet Oncol 2023）与 MARIPOSA 研究（NEJM 2024），MET 扩增是非小细胞肺癌三代 TKI 最关键的旁路耐药机制。针对 MET 高扩增/过表达患者，奥希替尼联合高选择性 MET 抑制剂赛沃替尼（Savolitinib）可取得 49% 的客观缓解率（ORR）与 7.1 个月的中位 PFS。同时，EGFR/MET 双特异性抗体埃万妥单抗（Amivantamab）能够通过靶向受体降解与 ADCC 双重效应克服旁路耐药。';
-      citations = ['36972041', '37812836'];
-    } else if (q.includes('C797S') || q.includes('顺式') || q.includes('反式')) {
-      answer = 'C797S 突变是奥希替尼常见的靶内耐药形式：\n1. 若 C797S 与 T790M 呈【反式 (trans)】存在于不同染色体等位基因上，一代 TKI（如吉非替尼）联合三代 TKI 可有效恢复对肿瘤生长的抑制；\n2. 若两者呈【顺式 (cis)】存在于同一染色体上，所有一至三代 TKI 均失去抗肿瘤活性，此时需要选择新型四代变构抑制剂（如 BLU-945）。';
-      citations = ['35894982', '34145781'];
-    } else if (q.includes('液体活检') || q.includes('ctDNA')) {
-      answer = 'AURA3 队列研究证据表明，基于外周血循环肿瘤 DNA (ctDNA) 的超灵敏二代测序（NGS）能够在影像学 RECIST 标准判定进展前平均 3.2 个月，捕捉到低频 C797S 顺式突变或 MET 拷贝数异常扩增，为临床实施抢先式靶向轮换（Preemptive Switch）提供了黄金干预窗口。';
-      citations = ['35147890'];
-    } else {
-      answer = `基于文献知识图谱与当前已检索论文库对“${q}”的深度分析：相关靶点在下游介导了关键细胞抗凋亡与代偿旁路信号。推荐结合高选择性抑制剂或双抗策略，阻断主干受体激活并增强免疫协同。`;
-      citations = props.topic.papers.slice(0, 2).map(p => p.pmid);
-    }
-
-    messages.value.push({
-      sender: 'agent',
-      text: answer,
-      citations: citations
-    });
-  }, 800);
 }
 </script>
