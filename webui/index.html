@@ -2,24 +2,19 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d2b4a'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%2365a0ff' font-family='serif'%3E%CE%A0%3C/text%3E%3C/svg%3E" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PubMiner Evidence Agent</title>
-    <script>
-      try {
-        var t = localStorage.getItem("pubminer-theme");
-        var dark = t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches);
-        document.documentElement.classList.toggle("dark", dark);
-      } catch (e) {}
-    </script>
-    <style>
-      html { background: #f3f5f9; }
-      html.dark { background: #0f1420; }
-    </style>
+    <title>PubMiner-Agent - 生物医药文献智能挖掘与知识发现系统</title>
+    <meta name="description" content="PubMiner-Agent 是基于大模型与知识图谱的生物医药文献智能挖掘 Agent 平台，支持 PubMed/PMC 自动检索、实体关系抽取、ECharts 知识图谱与多维学术分析。" />
+    <meta property="og:title" content="PubMiner-Agent - 生物医药文献智能挖掘与知识发现系统" />
+    <meta property="og:description" content="PubMiner-Agent 智能文献挖掘与知识发现系统，提供文献检索、实体抽取、交互式知识图谱与证据合成。" />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   </head>
-  <body>
+  <body class="bg-slate-50 text-slate-900 antialiased selection:bg-cyan-500 selection:text-white">
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
+
