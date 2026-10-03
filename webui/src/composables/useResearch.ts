@@ -71,6 +71,9 @@ const papers = computed(() => {
       uncertainCount: agg.uncertain_count,
       independentValidation: agg.independent_validation,
       evidenceCount: agg.support_count + agg.contradict_count + agg.no_effect_count + agg.uncertain_count,
+      sampleSize: agg.distinct_documents,
+      hazardRatio: '' as string,
+      pValue: '' as string,
     };
   });
 });

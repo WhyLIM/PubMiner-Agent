@@ -21,7 +21,7 @@ export interface Paper {
   year: number;
   authors: string;
   abstract: string;
-  studyType: 'Meta-Analysis' | 'Clinical Trial Phase III' | 'Clinical Trial Phase I/II' | 'Randomized Controlled Trial' | 'Systematic Review' | 'Prospective Cohort' | 'Preclinical / In Vitro';
+  studyType: string;
   sampleSize?: number;
   hazardRatio?: string;
   pValue?: string;
@@ -38,6 +38,14 @@ export interface Paper {
   openAccess: boolean;
   meshTerms: string[];
   biasRisk: 'Low' | 'Moderate' | 'High';
+  // 扩展字段（来自后端 useResearch）
+  signature?: string;
+  supportCount?: number;
+  contradictCount?: number;
+  noEffectCount?: number;
+  uncertainCount?: number;
+  independentValidation?: boolean;
+  evidenceCount?: number;
 }
 
 export interface GraphNode {

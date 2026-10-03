@@ -487,7 +487,7 @@
 
           <div class="space-y-2">
             <div
-              v-for="(triple, idx) in selectedPaper.triples"
+              v-for="(triple, idx) in (selectedPaper.triples as Array<{subject: string; predicate: string; object: string; confidence: number}> ?? [])"
               :key="idx"
               class="p-2.5 rounded-lg border border-slate-200 bg-white flex items-center justify-between text-xs"
             >
@@ -523,19 +523,13 @@
 import { ref, computed } from 'vue';
 import { Paper } from '../types';
 import { ElMessage } from 'element-plus';
+import { useResearch } from '@/composables/useResearch';
+import { agentApi } from '@/api/client';
 
-const props = defineProps<{
-  papers: Paper[];
-  initialQuery: string;
-}>();
+const { papers, createAndRunSession, loading: researchLoading, error: researchError, selectClaim, sessionId } = useResearch();
 
-const emit = defineEmits<{
-  (e: 'search-query', query: string): void;
-  (e: 'update-status', payload: { id: string; status: Paper['screeningStatus'] }): void;
-}>();
-
-const searchQuery = ref(props.initialQuery);
-const isSearching = ref(false);
+const searchQuery = ref('');
+const isSearching = ref(researchLoading);
 const filterExpanded = ref(false);
 const viewMode = ref<'card' | 'table'>('card');
 const paperKeyword = ref('');
@@ -543,7 +537,7 @@ const activeScreeningFilter = ref<'all' | 'included' | 'flagged' | 'excluded'>('
 
 // Drawer State
 const drawerVisible = ref(false);
-const selectedPaper = ref<Paper | null>(null);
+const selectedPaper = ref<(typeof papers.value)[0] | null>(null);
 
 // Filters
 const selectedStudyType = ref('');
@@ -561,23 +555,43 @@ const sources = ref({
 const enableMeSHExpansion = ref(true);
 const enableAIExtraction = ref(true);
 
-const includedCount = computed(() => props.papers.filter(p => p.screeningStatus === 'included').length);
-const totalTriplesCount = computed(() => props.papers.reduce((sum, p) => sum + p.triples.length, 0));
+const includedCount = computed(() => papers.value.filter(p => p.screeningStatus === 'included').length);
+const totalTriplesCount = computed(() => papers.value.reduce((sum, p) => sum + p.triples.length, 0));
 const averageCitations = computed(() => {
-  if (!props.papers.length) return 0;
-  const sum = props.papers.reduce((acc, p) => acc + p.citations, 0);
-  return (sum / props.papers.length).toFixed(1);
+  if (!papers.value.length) return 0;
+  const sum = papers.value.reduce((acc, p) => acc + p.citations, 0);
+  return (sum / papers.value.length).toFixed(1);
 });
 
 const screeningTabs = computed(() => [
-  { key: 'all' as const, label: '全部文献', count: props.papers.length },
-  { key: 'included' as const, label: '已纳入', count: props.papers.filter(p => p.screeningStatus === 'included').length },
-  { key: 'flagged' as const, label: '待复核', count: props.papers.filter(p => p.screeningStatus === 'flagged').length },
-  { key: 'excluded' as const, label: '已排除', count: props.papers.filter(p => p.screeningStatus === 'excluded').length },
+  { key: 'all' as const, label: '全部文献', count: papers.value.length },
+  { key: 'included' as const, label: '已纳入', count: papers.value.filter(p => p.screeningStatus === 'included').length },
+  { key: 'flagged' as const, label: '待复核', count: papers.value.filter(p => p.screeningStatus === 'flagged').length },
+  { key: 'excluded' as const, label: '已排除', count: papers.value.filter(p => p.screeningStatus === 'excluded').length },
 ]);
 
+async function submitReviewForStatus(claimId: string, status: string) {
+  const decisionMap: Record<string, 'ACCEPT' | 'REJECT' | 'NEEDS_REVIEW'> = {
+    included: 'ACCEPT',
+    excluded: 'REJECT',
+    flagged: 'NEEDS_REVIEW',
+  };
+  const decision = decisionMap[status];
+  if (!decision) { return; }
+  try {
+    await agentApi.submitReviewDecision({
+      claim_id: claimId, decision, reviewer_id: 'curator',
+      reason: `Literature view: marked as ${status}`,
+      expected_version: 1,
+    });
+    ElMessage.success(`已${status === 'included' ? '纳入' : status === 'excluded' ? '排除' : '标记待审'}`);
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : String(err));
+  }
+}
+
 const filteredPapers = computed(() => {
-  return props.papers.filter(paper => {
+  return papers.value.filter(paper => {
     // Tab filter
     if (activeScreeningFilter.value !== 'all' && paper.screeningStatus !== activeScreeningFilter.value) {
       return false;
@@ -617,22 +631,25 @@ function handleSearch() {
     return;
   }
   isSearching.value = true;
-  setTimeout(() => {
-    emit('search-query', searchQuery.value);
-    isSearching.value = false;
-    ElMessage.success(`检索完成: 找到 ${props.papers.length} 篇相关生物医药文献`);
-  }, 600);
+  createAndRunSession(searchQuery.value)
+    .then(() => {
+      ElMessage.success(`检索完成: 找到 ${papers.value.length} 篇相关生物医药文献`);
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      isSearching.value = false;
+    });
 }
 
 function updatePaperStatus(id: string, status: Paper['screeningStatus']) {
-  emit('update-status', { id, status });
+  void submitReviewForStatus(id, status);
   ElMessage.success({
     message: status === 'included' ? '已标记为纳入' : status === 'flagged' ? '已标记为待核实' : '已标记为排除',
     duration: 1500
   });
 }
 
-function openPaperDrawer(paper: Paper) {
+function openPaperDrawer(paper: (typeof papers.value)[0]) {
   selectedPaper.value = paper;
   drawerVisible.value = true;
 }
