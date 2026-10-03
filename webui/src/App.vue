@@ -158,20 +158,86 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import TopNav from './components/TopNav.vue';
 import LiteratureView from './components/LiteratureView.vue';
 import KnowledgeGraphView from './components/KnowledgeGraphView.vue';
 import AnalyticsView from './components/AnalyticsView.vue';
 import AgentWorkflowView from './components/AgentWorkflowView.vue';
 import SynthesisReviewView from './components/SynthesisReviewView.vue';
-import { RESEARCH_TOPICS, createCustomTopic } from './data/researchTopics';
 import { ResearchTopic, Paper } from './types';
 import { ElMessage } from 'element-plus';
+import { useResearch } from './composables/useResearch';
+import { agentApi } from './api/client';
 
+const research = useResearch();
 const activeTab = ref('literature');
-const topics = ref<ResearchTopic[]>([...RESEARCH_TOPICS]);
-const currentTopic = ref<ResearchTopic>(topics.value[0]);
+
+// 将后端数据映射为 ResearchTopic 供子组件消费
+const currentTopic = ref<ResearchTopic>({
+  id: 'pubminer',
+  title: research.session.value?.goal ?? 'PubMiner Evidence Agent',
+  englishTitle: '',
+  subtitle: 'Active mining session',
+  query: '',
+  meshTerms: [],
+  papers: [],
+  graphNodes: [],
+  graphLinks: [],
+  trendYears: [],
+  pubCounts: [],
+  citationAverages: [],
+  cooccurrenceMatrix: { xLabels: [], yLabels: [], data: [] },
+  evidenceDistribution: [],
+  biomarkerRanking: [],
+  reviewReport: '',
+});
+
+// 从 API 加载数据并更新 currentTopic
+onMounted(async () => {
+  await research.init();
+  refreshTopicFromResearch();
+});
+
+function refreshTopicFromResearch() {
+  currentTopic.value = {
+    ...currentTopic.value,
+    title: research.session.value?.goal ?? 'PubMiner Evidence Agent',
+    papers: research.papers.value as Paper[],
+    graphNodes: research.graphNodes.value,
+    graphLinks: research.graphLinks.value,
+    evidenceDistribution: [
+      { name: 'SUPPORT', value: research.statCards.value.support },
+      { name: 'CONTRADICT', value: research.statCards.value.contradict },
+      { name: 'UNCERTAIN', value: research.statCards.value.uncertain },
+    ],
+    biomarkerRanking: research.aggregations.value
+      .map(a => ({
+        name: a.canonical_signature.split(' | ')[0] ?? '',
+        score: a.support_count,
+        articles: a.distinct_documents,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10),
+    reviewReport: research.aggregations.value
+      .map(a => `## ${a.canonical_signature}\n\nSUPPORT: ${a.support_count} | CONTRADICT: ${a.contradict_count} | NO_EFFECT: ${a.no_effect_count}\n\n${a.reasons.join('\n')}`)
+      .join('\n\n---\n\n'),
+  };
+}
+
+// 暴露刷新方法给模板
+async function refreshAllData() {
+  await research.refreshAggregations();
+  await research.refreshClaims();
+  refreshTopicFromResearch();
+}
+
+// 监听 loading 状态变化后刷新
+watch(() => research.loading.value, (newVal) => {
+  if (!newVal) { refreshTopicFromResearch(); }
+});
+
+const topics = ref<ResearchTopic[]>([currentTopic.value]);
 
 // Custom Topic Modal
 const customDialogVisible = ref(false);
@@ -202,11 +268,8 @@ function handleTriggerAgent() {
 }
 
 function handleCustomSearch(query: string) {
-  // If user searched in LiteratureView
   if (query.length > 2) {
-    const newTopic = createCustomTopic(query);
-    topics.value.unshift(newTopic);
-    currentTopic.value = newTopic;
+    void research.createAndRunSession(query).then(() => refreshTopicFromResearch());
   }
 }
 
@@ -225,14 +288,14 @@ function submitCustomTopic() {
 
   isCreatingTopic.value = true;
   setTimeout(() => {
-    const newTopic = createCustomTopic(customInputQuery.value.trim());
-    topics.value.unshift(newTopic);
-    currentTopic.value = newTopic;
+    void research.createAndRunSession(customInputQuery.value.trim()).then(() => {
+      refreshTopicFromResearch();
+    });
     isCreatingTopic.value = false;
     customDialogVisible.value = false;
     customInputQuery.value = '';
     activeTab.value = 'workflow';
-    ElMessage.success(`已成功创建课题并启动 Agent 挖掘: ${newTopic.title}`);
+    ElMessage.success('已成功创建课题并启动 Agent 挖掘');
   }, 700);
 }
 
