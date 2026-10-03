@@ -2,32 +2,30 @@
   <div class="space-y-4">
     <!-- Graph Control Header Bar -->
     <div class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
         <!-- Entity Category Filters -->
-        <div class="flex items-center gap-3 flex-wrap">
-          <span class="text-xs font-semibold text-slate-700">实体类型过滤:</span>
-          <div class="flex items-center gap-2">
-            <el-checkbox v-model="visibleCategories[0]" label="生物标志物 (Subject)" size="small" />
-            <el-checkbox v-model="visibleCategories[1]" label="疾病/临床结局 (Object)" size="small" />
-          </div>
+        <div class="flex items-center gap-2 flex-wrap shrink-0">
+          <span class="text-xs font-semibold text-slate-700 whitespace-nowrap">实体类型:</span>
+          <el-checkbox v-model="visibleCategories[0]" label="生物标志物 (Subject)" size="small" />
+          <el-checkbox v-model="visibleCategories[1]" label="疾病/临床结局 (Object)" size="small" />
         </div>
 
-        <!-- Co-occurrence Strength & Actions -->
-        <div class="flex items-center gap-3 flex-wrap">
-          <div class="flex items-center gap-2 text-xs text-slate-500">
-            <span>最小文献共现数:</span>
-            <el-slider
-              v-model="minWeight"
-              :min="0"
-              :max="10"
-              :step="0.5"
-              size="small"
-              class="w-24 sm:w-32"
-            />
-            <span class="font-mono text-slate-800">{{ minWeight }}</span>
-          </div>
+        <!-- Co-occurrence Strength -->
+        <div class="flex items-center gap-2 text-xs text-slate-500 shrink-0 whitespace-nowrap">
+          <span>最小关联证据数:</span>
+          <el-slider
+            v-model="minWeight"
+            :min="0"
+            :max="10"
+            :step="0.5"
+            size="small"
+            class="w-24"
+          />
+          <span class="font-mono text-slate-800 w-7 text-right">{{ minWeight }}</span>
+        </div>
 
-          <!-- Entity Search in Graph -->
+        <!-- Search & Actions -->
+        <div class="flex items-center gap-2 flex-1 min-w-[240px] justify-end">
           <el-input
             v-model="searchKeyword"
             placeholder="定位实体 (如 EGFR, Osimertinib)..."
@@ -35,15 +33,13 @@
             size="small"
             clearable
             class="w-44 sm:w-52"
-            @input="handleSearchEntity"
           />
-
-          <el-button-group size="small">
+          <el-button-group size="small" class="shrink-0">
             <el-button @click="resetGraphZoom" title="重置视角">
               <el-icon><Refresh /></el-icon>
             </el-button>
             <el-button type="primary" @click="exportGraphImage" title="导出高分辨率图像">
-              <el-icon><Download /></el-icon>
+              <el-icon class="mr-0.5"><Download /></el-icon>
               <span>导出 PNG</span>
             </el-button>
           </el-button-group>

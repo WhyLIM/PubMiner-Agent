@@ -16,6 +16,7 @@ import {
   type AggregationItem,
   type ReviewQueueItem,
   type TaskListItem,
+  type DocumentItem,
 } from '@/api/client';
 
 const SESSION_KEY = 'pubminer-session-id';
@@ -29,6 +30,7 @@ const sessionId = ref<string | null>(localStorage.getItem(SESSION_KEY));
 const session = ref<SessionResource | null>(null);
 const claims = ref<ClaimItem[]>([]);
 const aggregations = ref<AggregationItem[]>([]);
+const documents = ref<DocumentItem[]>([]);
 const reviewQueue = ref<ReviewQueueItem[]>([]);
 const tasks = ref<TaskListItem[]>([]);
 const evidenceSpans = ref<EvidenceSpanItem[]>([]);
@@ -196,6 +198,7 @@ async function init() {
       refreshAggregations(),
       refreshQueue(),
       refreshTasks(),
+      refreshDocuments(),
     ]);
     if (sessionId.value) {
       await refreshSession();
@@ -213,6 +216,10 @@ async function refreshClaims() {
 
 async function refreshAggregations() {
   aggregations.value = (await agentApi.getAggregations()).aggregations;
+}
+
+async function refreshDocuments() {
+  documents.value = (await agentApi.listDocuments(100)).documents;
 }
 
 async function refreshQueue() {
@@ -247,6 +254,7 @@ async function refreshAll() {
     refreshAggregations(),
     refreshQueue(),
     refreshTasks(),
+    refreshDocuments(),
     refreshCoverage(),
   ]);
 }
@@ -376,12 +384,13 @@ export function useResearch() {
   return {
     sessionId, session, claims, aggregations, reviewQueue, tasks,
     evidenceSpans, selectedClaimId, loading, error, events, coverage,
+    documents,
     activeTab,
     papers, graphNodes, graphLinks, statCards, claimVersions,
     runningTaskId, taskStatus, taskSteps,
     init, createAndRunSession, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
-    refreshSession, refreshCoverage, refreshAll,
+    refreshDocuments, refreshSession, refreshCoverage, refreshAll,
     startPolling, stopPolling, runAndWait, clearError,
   };
 }

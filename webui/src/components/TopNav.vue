@@ -28,7 +28,7 @@
       >
         <el-icon :size="14"><component :is="item.icon" /></el-icon>
         <span>{{ item.label }}</span>
-        <span v-if="item.badge" class="ml-1 px-1.5 py-0.2 text-[10px] rounded bg-slate-200/70 text-slate-600 font-mono">
+        <span v-if="item.badge" class="ml-1 px-1.5 py-0.5 text-[10px] leading-none rounded bg-slate-200/70 text-slate-600 font-mono">
           {{ item.badge }}
         </span>
       </button>

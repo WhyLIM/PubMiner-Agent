@@ -179,6 +179,11 @@ class Container:
 
         return EntityRepository(session)
 
+    def document_repository(self, session: Session):
+        from pubminer.infrastructure.db.repositories.documents import DocumentRepository
+
+        return DocumentRepository(session)
+
 
 def build_container(
     db_url: str | None = None,

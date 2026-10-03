@@ -39,6 +39,155 @@ class DocumentRepository:
         row = self.session.get(DocumentRow, document_id)
         return self._to_domain(row) if row else None
 
+    def list_documents_with_evidence(self, limit: int = 100) -> list[dict]:
+        """文献级聚合（轻量，不含正文）：metadata + 标识符 + 关联 claim/evidence 极性统计。
+
+        按证据数降序；无证据文献也返回（claims 为空）。
+        """
+        from collections import Counter
+
+        from pubminer.infrastructure.db.orm_claims import ClaimRow, EvidenceRow
+
+        doc_rows = self.session.execute(select(DocumentRow)).scalars().unique().all()
+        pairs = self.session.execute(
+            select(EvidenceRow, ClaimRow).join(ClaimRow, ClaimRow.id == EvidenceRow.claim_id)
+        ).all()
+
+        evidence_by_doc: dict[UUID, list] = {}
+        for ev, claim in pairs:
+            evidence_by_doc.setdefault(ev.document_id, []).append((ev, claim))
+
+        results: list[dict] = []
+        for doc in doc_rows:
+            identifiers = {i.kind: i.value for i in doc.identifiers}
+            doc_evidence = evidence_by_doc.get(doc.id, [])
+            polarities = Counter(ev.polarity for ev, _ in doc_evidence)
+            claims_map: dict[UUID, dict] = {}
+            for ev, claim in doc_evidence:
+                entry = claims_map.setdefault(
+                    claim.id,
+                    {
+                        "claim_id": str(claim.id),
+                        "canonical_signature": claim.canonical_signature,
+                        "status": claim.status,
+                        "predicate": claim.predicate,
+                        "direction": claim.direction,
+                        "support_count": 0,
+                        "contradict_count": 0,
+                        "no_effect_count": 0,
+                        "uncertain_count": 0,
+                    },
+                )
+                key = {
+                    "SUPPORT": "support_count",
+                    "CONTRADICT": "contradict_count",
+                    "NO_EFFECT": "no_effect_count",
+                    "UNCERTAIN": "uncertain_count",
+                }[ev.polarity]
+                entry[key] += 1
+            results.append(
+                {
+                    "document_id": str(doc.id),
+                    "title": doc.title or "",
+                    "journal": doc.journal or "",
+                    "year": doc.year,
+                    "authors": list(doc.authors or []),
+                    "abstract": doc.abstract or "",
+                    "pmid": identifiers.get("pmid", ""),
+                    "pmcid": identifiers.get("pmcid", ""),
+                    "doi": identifiers.get("doi", ""),
+                    "source": doc.versions[0].source if doc.versions else "",
+                    "evidence_count": len(doc_evidence),
+                    "support_count": polarities.get("SUPPORT", 0),
+                    "contradict_count": polarities.get("CONTRADICT", 0),
+                    "no_effect_count": polarities.get("NO_EFFECT", 0),
+                    "uncertain_count": polarities.get("UNCERTAIN", 0),
+                    "claims": list(claims_map.values()),
+                }
+            )
+        results.sort(key=lambda d: -d["evidence_count"])
+        return results[:limit]
+
+    def get_document_detail(self, document_id: UUID) -> dict | None:
+        """文献详情：metadata + 关联 claims + 证据片段（含 canonical_text 供 span 高亮）。"""
+        from collections import Counter
+
+        from pubminer.infrastructure.db.orm_claims import ClaimRow, EvidenceRow
+
+        row = self.session.get(DocumentRow, document_id)
+        if row is None:
+            return None
+        pairs = self.session.execute(
+            select(EvidenceRow, ClaimRow)
+            .join(ClaimRow, ClaimRow.id == EvidenceRow.claim_id)
+            .where(EvidenceRow.document_id == document_id)
+        ).all()
+
+        identifiers = {i.kind: i.value for i in row.identifiers}
+        polarities: Counter = Counter(ev.polarity for ev, _ in pairs)
+        claims_map: dict[UUID, dict] = {}
+        evidence_items: list[dict] = []
+        version_texts: dict[UUID, str] = {}
+        for ev, claim in pairs:
+            entry = claims_map.setdefault(
+                claim.id,
+                {
+                    "claim_id": str(claim.id),
+                    "canonical_signature": claim.canonical_signature,
+                    "status": claim.status,
+                    "predicate": claim.predicate,
+                    "direction": claim.direction,
+                    "support_count": 0,
+                    "contradict_count": 0,
+                    "no_effect_count": 0,
+                    "uncertain_count": 0,
+                },
+            )
+            key = {
+                "SUPPORT": "support_count",
+                "CONTRADICT": "contradict_count",
+                "NO_EFFECT": "no_effect_count",
+                "UNCERTAIN": "uncertain_count",
+            }[ev.polarity]
+            entry[key] += 1
+            if ev.document_version_id not in version_texts:
+                version_row = self.session.get(DocumentVersionRow, ev.document_version_id)
+                version_texts[ev.document_version_id] = version_row.canonical_text if version_row else ""
+            evidence_items.append(
+                {
+                    "evidence_id": str(ev.id),
+                    "claim_id": str(claim.id),
+                    "claim_signature": claim.canonical_signature,
+                    "polarity": ev.polarity,
+                    "section_path": ev.section_path or "",
+                    "start_char": ev.span_start,
+                    "end_char": ev.span_end,
+                    "span_text": ev.span_text or "",
+                    "review_status": ev.review_status,
+                    "canonical_text": version_texts[ev.document_version_id],
+                }
+            )
+
+        return {
+            "document_id": str(row.id),
+            "title": row.title or "",
+            "journal": row.journal or "",
+            "year": row.year,
+            "authors": list(row.authors or []),
+            "abstract": row.abstract or "",
+            "pmid": identifiers.get("pmid", ""),
+            "pmcid": identifiers.get("pmcid", ""),
+            "doi": identifiers.get("doi", ""),
+            "source": row.versions[0].source if row.versions else "",
+            "evidence_count": len(pairs),
+            "support_count": polarities.get("SUPPORT", 0),
+            "contradict_count": polarities.get("CONTRADICT", 0),
+            "no_effect_count": polarities.get("NO_EFFECT", 0),
+            "uncertain_count": polarities.get("UNCERTAIN", 0),
+            "claims": list(claims_map.values()),
+            "evidence": evidence_items,
+        }
+
     # ---------------------------------------------------------------- write
 
     def upsert_document(self, doc: Document) -> Document:

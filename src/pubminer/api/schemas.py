@@ -174,6 +174,7 @@ class ClaimEvidenceItem(BaseModel):
     study: dict[str, Any] = Field(default_factory=dict)
     statistics: dict[str, Any] | None = None
     review_status: str = "pending"
+    document_id: str = ""
     document_version_id: str = ""
     document_title: str = ""
     canonical_text: str = Field("", description="span 所在的固定 canonical text，用于 UI 高亮定位")
@@ -199,6 +200,58 @@ class AggregationItem(BaseModel):
     distinct_documents: int = 0
     reasons: list[str] = Field(default_factory=list)
     subject_name: str = ""
+
+
+class DocumentClaimEntry(BaseModel):
+    claim_id: str
+    canonical_signature: str
+    status: str
+    predicate: str
+    direction: str
+    support_count: int = 0
+    contradict_count: int = 0
+    no_effect_count: int = 0
+    uncertain_count: int = 0
+
+
+class DocumentEvidenceEntry(BaseModel):
+    evidence_id: str
+    claim_id: str
+    claim_signature: str = ""
+    polarity: str
+    section_path: str = ""
+    start_char: int = 0
+    end_char: int = 0
+    span_text: str = ""
+    review_status: str = "PENDING"
+    canonical_text: str = ""
+
+
+class DocumentItem(BaseModel):
+    document_id: str
+    title: str = ""
+    journal: str = ""
+    year: int | None = None
+    authors: list[str] = Field(default_factory=list)
+    abstract: str = ""
+    pmid: str = ""
+    pmcid: str = ""
+    doi: str = ""
+    source: str = ""
+    evidence_count: int = 0
+    support_count: int = 0
+    contradict_count: int = 0
+    no_effect_count: int = 0
+    uncertain_count: int = 0
+    claims: list[DocumentClaimEntry] = Field(default_factory=list)
+
+
+class DocumentDetail(DocumentItem):
+    evidence: list[DocumentEvidenceEntry] = Field(default_factory=list)
+
+
+class DocumentsResponse(BaseModel):
+    documents: list[DocumentItem] = Field(default_factory=list)
 
 
 class CoverageQuestionItem(BaseModel):

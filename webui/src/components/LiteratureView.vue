@@ -18,7 +18,7 @@
               </template>
             </el-input>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 shrink-0">
             <el-button type="primary" size="large" @click="handleSearch" :loading="isSearching">
               <el-icon class="mr-1"><Search /></el-icon>
               {{ isSearching ? '管线执行中...' : '启动挖掘' }}
@@ -41,12 +41,14 @@
         <!-- Advanced Filter Row (Collapsible, operates on real fields) -->
         <div v-if="filterExpanded" class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 text-xs">
           <div>
-            <label class="block text-slate-500 mb-1 font-medium">最少独立文献数</label>
+            <label class="block text-slate-500 mb-1 font-medium">
+              {{ displayDim === 'document' ? '最少证据条数' : '最少独立文献数' }}
+            </label>
             <el-select v-model="minDocuments" placeholder="不限" size="small" class="w-full">
               <el-option label="不限" :value="0" />
-              <el-option label="≥ 2 篇独立文献" :value="2" />
-              <el-option label="≥ 3 篇独立文献 (独立验证阈值)" :value="3" />
-              <el-option label="≥ 5 篇独立文献" :value="5" />
+              <el-option label="≥ 2" :value="2" />
+              <el-option label="≥ 3 (独立验证阈值)" :value="3" />
+              <el-option label="≥ 5" :value="5" />
             </el-select>
           </div>
 
@@ -54,7 +56,7 @@
             <label class="block text-slate-500 mb-1 font-medium">证据倾向</label>
             <div class="pt-1.5 flex flex-wrap items-center gap-3">
               <el-checkbox v-model="onlyConflict" label="仅看存在反驳证据" size="small" />
-              <el-checkbox v-model="onlyValidated" label="仅看独立验证" size="small" />
+              <el-checkbox v-if="displayDim === 'claim'" v-model="onlyValidated" label="仅看独立验证" size="small" />
             </div>
           </div>
 
@@ -64,7 +66,7 @@
               <el-option label="证据总数 (多 → 少)" value="evidence" />
               <el-option label="支持证据 (多 → 少)" value="support" />
               <el-option label="反驳证据 (多 → 少)" value="contradict" />
-              <el-option label="独立文献数 (多 → 少)" value="documents" />
+              <el-option v-if="displayDim === 'claim'" label="独立文献数 (多 → 少)" value="documents" />
             </el-select>
           </div>
         </div>
@@ -84,10 +86,10 @@
     <!-- Quantitative Metrics Strip (all real) -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
       <div class="bg-white border border-slate-200 rounded-lg p-3.5 flex flex-col justify-between">
-        <span class="text-xs text-slate-500 font-medium">证据聚合命题</span>
+        <span class="text-xs text-slate-500 font-medium">{{ displayDim === 'document' ? '检索文献' : '证据聚合命题' }}</span>
         <div class="mt-1 flex items-baseline gap-2">
-          <span class="text-2xl font-bold font-mono text-slate-900">{{ papers.length }}</span>
-          <span class="text-xs text-slate-400 font-mono">条断言</span>
+          <span class="text-2xl font-bold font-mono text-slate-900">{{ displayDim === 'document' ? documents.length : papers.length }}</span>
+          <span class="text-xs text-slate-400 font-mono">{{ displayDim === 'document' ? '篇文献' : '条断言' }}</span>
         </div>
       </div>
 
@@ -120,35 +122,45 @@
     <div class="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
       <!-- Toolbar -->
       <div class="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70">
-        <div class="flex items-center gap-1">
-          <button
-            v-for="tab in screeningTabs"
-            :key="tab.key"
-            @click="activeScreeningFilter = tab.key"
-            :class="[
-              'px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5',
-              activeScreeningFilter === tab.key
-                ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
-                : 'text-slate-600 hover:text-slate-900'
-            ]"
-          >
-            <span>{{ tab.label }}</span>
-            <span class="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-              {{ tab.count }}
-            </span>
-          </button>
+        <div class="flex items-center gap-1 flex-wrap">
+          <template v-if="displayDim === 'claim'">
+            <button
+              v-for="tab in screeningTabs"
+              :key="tab.key"
+              @click="activeScreeningFilter = tab.key"
+              :class="[
+                'px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5',
+                activeScreeningFilter === tab.key
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              ]"
+            >
+              <span>{{ tab.label }}</span>
+              <span class="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                {{ tab.count }}
+              </span>
+            </button>
+          </template>
+          <span v-else class="text-xs text-slate-500 font-medium px-1">
+            共 {{ filteredDocuments.length }} 篇文献（按证据数排序）
+          </span>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+          <!-- 展示维度切换：按命题 / 按文献 -->
+          <el-radio-group v-model="displayDim" size="small">
+            <el-radio-button value="claim">按命题</el-radio-button>
+            <el-radio-button value="document">按文献</el-radio-button>
+          </el-radio-group>
           <el-input
             v-model="paperKeyword"
-            placeholder="在结果中快速过滤..."
+            :placeholder="displayDim === 'document' ? '过滤文献 (标题/期刊/PMID)...' : '在结果中快速过滤...'"
             prefix-icon="Search"
             size="small"
             clearable
-            class="w-48 sm:w-60"
+            class="w-44 sm:w-56"
           />
-          <el-button-group size="small">
+          <el-button-group v-if="displayDim === 'claim'" size="small">
             <el-button :type="viewMode === 'card' ? 'primary' : 'default'" @click="viewMode = 'card'">
               <el-icon><Menu /></el-icon>
             </el-button>
@@ -159,214 +171,309 @@
         </div>
       </div>
 
-      <!-- Card Mode View -->
-      <div v-if="viewMode === 'card'" class="divide-y divide-slate-100">
-        <div
-          v-for="paper in filteredPapers"
-          :key="paper.id"
-          class="p-4 sm:p-5 hover:bg-slate-50/60 transition-colors flex flex-col gap-3 group"
-        >
-          <!-- Metadata Kicker Line -->
-          <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 font-sans">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-mono text-slate-400">断言 {{ paper.id.slice(0, 8) }}</span>
-              <span aria-hidden="true" class="text-slate-300">·</span>
-              <span class="text-sky-700 font-medium">{{ statusLabel(paper.studyType) }}</span>
-              <span
-                v-if="paper.independentValidation"
-                class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-medium"
-              >独立验证</span>
-              <span
-                v-if="(paper.contradictCount ?? 0) > 0"
-                class="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200/60 font-medium"
-              >存在反驳</span>
-            </div>
-
-            <!-- Quick Screening Actions -->
-            <div class="flex items-center gap-1.5">
-              <button
-                @click="updatePaperStatus(paper, 'included')"
-                :class="[
-                  'px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1',
-                  paper.screeningStatus === 'included'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                ]"
-                title="批准该断言 (ACCEPT)"
-              >
-                <el-icon><Check /></el-icon>
-                <span>批准</span>
-              </button>
-
-              <button
-                @click="updatePaperStatus(paper, 'flagged')"
-                :class="[
-                  'px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1',
-                  paper.screeningStatus === 'flagged'
-                    ? 'bg-amber-500 text-white shadow-xs'
-                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                ]"
-                title="转人工复核 (NEEDS_REVIEW)"
-              >
-                <el-icon><Warning /></el-icon>
-                <span>待定</span>
-              </button>
-
-              <button
-                @click="updatePaperStatus(paper, 'excluded')"
-                :class="[
-                  'px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1',
-                  paper.screeningStatus === 'excluded'
-                    ? 'bg-rose-600 text-white shadow-xs'
-                    : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                ]"
-                title="否决该断言 (REJECT)"
-              >
-                <el-icon><Close /></el-icon>
-                <span>否决</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Canonical Signature as Title -->
-          <h3
-            @click="openPaperDrawer(paper)"
-            class="text-sm sm:text-base font-semibold text-slate-900 group-hover:text-sky-700 transition-colors cursor-pointer leading-snug font-mono"
+      <!-- ==================== 按命题 ==================== -->
+      <template v-if="displayDim === 'claim'">
+        <!-- Card Mode View -->
+        <div v-if="viewMode === 'card'" class="divide-y divide-slate-100">
+          <div
+            v-for="paper in filteredPapers"
+            :key="paper.id"
+            class="p-4 sm:p-5 hover:bg-slate-50/60 transition-colors flex flex-col gap-3 group"
           >
-            {{ paper.title }}
-          </h3>
+            <!-- Metadata Kicker Line -->
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-mono text-slate-400">断言 {{ paper.id.slice(0, 8) }}</span>
+                <span aria-hidden="true" class="text-slate-300">·</span>
+                <span class="text-sky-700 font-medium">{{ statusLabel(paper.studyType) }}</span>
+                <span
+                  v-if="paper.independentValidation"
+                  class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-medium"
+                >独立验证</span>
+                <span
+                  v-if="(paper.contradictCount ?? 0) > 0"
+                  class="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200/60 font-medium"
+                >存在反驳</span>
+              </div>
 
-          <!-- Aggregation reasons snippet -->
-          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed line-clamp-2">
-            {{ paper.abstract }}
-          </p>
+              <!-- Quick Screening Actions -->
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button
+                  @click="updatePaperStatus(paper, 'included')"
+                  :class="[
+                    'px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1',
+                    paper.screeningStatus === 'included'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  ]"
+                  title="批准该断言 (ACCEPT)"
+                >
+                  <el-icon><Check /></el-icon>
+                  <span>批准</span>
+                </button>
 
-          <!-- Polarity counts (real data) -->
-          <div class="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs border-t border-slate-100">
-            <div class="flex flex-wrap items-center gap-3">
-              <span class="text-slate-600">
-                <span class="text-slate-400">支持</span>
-                <span class="ml-1 font-mono font-semibold text-emerald-700">{{ paper.supportCount ?? 0 }}</span>
-              </span>
-              <span class="text-slate-600">
-                <span class="text-slate-400">反驳</span>
-                <span class="ml-1 font-mono font-semibold text-rose-700">{{ paper.contradictCount ?? 0 }}</span>
-              </span>
-              <span class="text-slate-600">
-                <span class="text-slate-400">无效应</span>
-                <span class="ml-1 font-mono font-semibold text-slate-700">{{ paper.noEffectCount ?? 0 }}</span>
-              </span>
-              <span class="text-slate-600">
-                <span class="text-slate-400">不确定</span>
-                <span class="ml-1 font-mono font-semibold text-amber-700">{{ paper.uncertainCount ?? 0 }}</span>
-              </span>
+                <button
+                  @click="updatePaperStatus(paper, 'flagged')"
+                  :class="[
+                    'px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1',
+                    paper.screeningStatus === 'flagged'
+                      ? 'bg-amber-500 text-white shadow-xs'
+                      : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                  ]"
+                  title="转人工复核 (NEEDS_REVIEW)"
+                >
+                  <el-icon><Warning /></el-icon>
+                  <span>待定</span>
+                </button>
+
+                <button
+                  @click="updatePaperStatus(paper, 'excluded')"
+                  :class="[
+                    'px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1',
+                    paper.screeningStatus === 'excluded'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                  ]"
+                  title="否决该断言 (REJECT)"
+                >
+                  <el-icon><Close /></el-icon>
+                  <span>否决</span>
+                </button>
+              </div>
             </div>
 
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="px-2 py-0.5 rounded text-[11px] bg-slate-50 text-slate-600 border border-slate-200/60 font-mono">
-                {{ paper.sampleSize ?? 0 }} 篇独立文献
-              </span>
-              <button
-                @click="openPaperDrawer(paper)"
-                class="text-xs text-sky-600 hover:text-sky-800 font-medium ml-1 flex items-center gap-0.5"
-              >
-                <span>查看证据原文</span>
-                <el-icon :size="12"><ArrowRight /></el-icon>
-              </button>
+            <!-- Title -->
+            <h3
+              @click="openPaperDrawer(paper)"
+              class="text-sm sm:text-base font-semibold text-slate-900 group-hover:text-sky-700 transition-colors cursor-pointer leading-snug font-mono"
+            >
+              {{ paper.title }}
+            </h3>
+
+            <!-- Aggregation reasons snippet -->
+            <p class="text-xs sm:text-sm text-slate-600 leading-relaxed line-clamp-2">
+              {{ paper.abstract }}
+            </p>
+
+            <!-- Polarity counts (real data) -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs border-t border-slate-100">
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="text-slate-600">
+                  <span class="text-slate-400">支持</span>
+                  <span class="ml-1 font-mono font-semibold text-emerald-700">{{ paper.supportCount ?? 0 }}</span>
+                </span>
+                <span class="text-slate-600">
+                  <span class="text-slate-400">反驳</span>
+                  <span class="ml-1 font-mono font-semibold text-rose-700">{{ paper.contradictCount ?? 0 }}</span>
+                </span>
+                <span class="text-slate-600">
+                  <span class="text-slate-400">无效应</span>
+                  <span class="ml-1 font-mono font-semibold text-slate-700">{{ paper.noEffectCount ?? 0 }}</span>
+                </span>
+                <span class="text-slate-600">
+                  <span class="text-slate-400">不确定</span>
+                  <span class="ml-1 font-mono font-semibold text-amber-700">{{ paper.uncertainCount ?? 0 }}</span>
+                </span>
+              </div>
+
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="px-2 py-0.5 rounded text-[11px] bg-slate-50 text-slate-600 border border-slate-200/60 font-mono">
+                  {{ paper.sampleSize ?? 0 }} 篇独立文献
+                </span>
+                <button
+                  @click="openPaperDrawer(paper)"
+                  class="text-xs text-sky-600 hover:text-sky-800 font-medium ml-1 flex items-center gap-0.5"
+                >
+                  <span>查看证据原文</span>
+                  <el-icon :size="12"><ArrowRight /></el-icon>
+                </button>
+              </div>
             </div>
+          </div>
+
+          <div v-if="filteredPapers.length === 0" class="p-12 text-center text-slate-400 text-xs">
+            {{ papers.length === 0 ? '暂无数据：请先启动一次挖掘管线。' : '没有匹配当前筛选条件的命题。' }}
           </div>
         </div>
 
-        <div v-if="filteredPapers.length === 0" class="p-12 text-center text-slate-400 text-xs">
-          {{ papers.length === 0 ? '暂无数据：请先启动一次挖掘管线。' : '没有匹配当前筛选条件的命题。' }}
-        </div>
-      </div>
+        <!-- Table Mode View -->
+        <div v-else class="overflow-x-auto">
+          <el-table :data="filteredPapers" stripe style="width: 100%">
+            <el-table-column label="断言 ID" width="110">
+              <template #default="{ row }">
+                <span class="font-mono text-xs text-sky-700 font-medium">{{ row.id.slice(0, 8) }}</span>
+              </template>
+            </el-table-column>
 
-      <!-- Table Mode View -->
-      <div v-else class="overflow-x-auto">
-        <el-table :data="filteredPapers" stripe style="width: 100%">
-          <el-table-column label="断言 ID" width="110">
-            <template #default="{ row }">
-              <span class="font-mono text-xs text-sky-700 font-medium">{{ row.id.slice(0, 8) }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="规范签名 (Subject | Predicate | Object)" min-width="280">
-            <template #default="{ row }">
-              <div
-                @click="openPaperDrawer(row)"
-                class="font-mono text-xs text-slate-800 hover:text-sky-600 cursor-pointer line-clamp-1"
-              >
-                {{ row.title }}
-              </div>
-              <div class="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
-                {{ row.abstract }}
-              </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="状态" width="110" align="center">
-            <template #default="{ row }">
-              <el-tag
-                :type="row.screeningStatus === 'included' ? 'success' : row.screeningStatus === 'flagged' ? 'warning' : row.screeningStatus === 'excluded' ? 'danger' : 'info'"
-                size="small"
-              >
-                {{ statusLabel(row.studyType) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="支持/反驳" width="100" align="center">
-            <template #default="{ row }">
-              <span class="text-xs font-mono">
-                <span class="text-emerald-700">{{ row.supportCount ?? 0 }}</span>
-                /
-                <span class="text-rose-700">{{ row.contradictCount ?? 0 }}</span>
-              </span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="独立文献" width="90" align="center">
-            <template #default="{ row }">
-              <span class="text-xs font-mono text-slate-700">{{ row.sampleSize ?? 0 }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="标记" width="150" align="center">
-            <template #default="{ row }">
-              <div class="flex items-center justify-center gap-1">
-                <el-tag v-if="row.independentValidation" type="success" size="small" effect="plain">独立验证</el-tag>
-                <el-tag v-if="(row.contradictCount ?? 0) > 0" type="danger" size="small" effect="plain">反驳</el-tag>
-              </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="操作" width="140" align="right">
-            <template #default="{ row }">
-              <div class="flex items-center justify-end gap-1">
-                <el-button link type="primary" size="small" @click="openPaperDrawer(row)">
-                  证据
-                </el-button>
-                <el-button
-                  link
-                  :type="row.screeningStatus === 'included' ? 'danger' : 'success'"
-                  size="small"
-                  @click="updatePaperStatus(row, row.screeningStatus === 'included' ? 'excluded' : 'included')"
+            <el-table-column label="规范签名 (Subject | Predicate | Object)" min-width="280">
+              <template #default="{ row }">
+                <div
+                  @click="openPaperDrawer(row)"
+                  class="font-mono text-xs text-slate-800 hover:text-sky-600 cursor-pointer line-clamp-1"
                 >
-                  {{ row.screeningStatus === 'included' ? '否决' : '批准' }}
-                </el-button>
+                  {{ row.title }}
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                  {{ row.abstract }}
+                </div>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="状态" width="110" align="center">
+              <template #default="{ row }">
+                <el-tag
+                  :type="row.screeningStatus === 'included' ? 'success' : row.screeningStatus === 'flagged' ? 'warning' : row.screeningStatus === 'excluded' ? 'danger' : 'info'"
+                  size="small"
+                >
+                  {{ statusLabel(row.studyType) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="支持/反驳" width="100" align="center">
+              <template #default="{ row }">
+                <span class="text-xs font-mono">
+                  <span class="text-emerald-700">{{ row.supportCount ?? 0 }}</span>
+                  /
+                  <span class="text-rose-700">{{ row.contradictCount ?? 0 }}</span>
+                </span>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="独立文献" width="90" align="center">
+              <template #default="{ row }">
+                <span class="text-xs font-mono text-slate-700">{{ row.sampleSize ?? 0 }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="标记" width="150" align="center">
+              <template #default="{ row }">
+                <div class="flex items-center justify-center gap-1">
+                  <el-tag v-if="row.independentValidation" type="success" size="small" effect="plain">独立验证</el-tag>
+                  <el-tag v-if="(row.contradictCount ?? 0) > 0" type="danger" size="small" effect="plain">反驳</el-tag>
+                </div>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="操作" width="140" align="right">
+              <template #default="{ row }">
+                <div class="flex items-center justify-end gap-1">
+                  <el-button link type="primary" size="small" @click="openPaperDrawer(row)">
+                    证据
+                  </el-button>
+                  <el-button
+                    link
+                    :type="row.screeningStatus === 'included' ? 'danger' : 'success'"
+                    size="small"
+                    @click="updatePaperStatus(row, row.screeningStatus === 'included' ? 'excluded' : 'included')"
+                  >
+                    {{ row.screeningStatus === 'included' ? '否决' : '批准' }}
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
+
+      <!-- ==================== 按文献 ==================== -->
+      <template v-else>
+        <div class="divide-y divide-slate-100">
+          <div
+            v-for="doc in filteredDocuments"
+            :key="doc.document_id"
+            class="p-4 sm:p-5 hover:bg-slate-50/60 transition-colors flex flex-col gap-3 group"
+          >
+            <!-- Kicker: identifiers + journal -->
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span v-if="doc.pmid" class="font-mono text-sky-700 font-medium">PMID: {{ doc.pmid }}</span>
+                <span v-if="doc.pmcid" class="font-mono text-emerald-700">PMCID: {{ doc.pmcid }}</span>
+                <span v-if="doc.journal" aria-hidden="true" class="text-slate-300">·</span>
+                <span v-if="doc.journal" class="font-semibold text-slate-700 line-clamp-1">{{ doc.journal }}</span>
+                <span v-if="doc.year" aria-hidden="true" class="text-slate-300">·</span>
+                <span v-if="doc.year" class="font-mono">{{ doc.year }}</span>
+                <span v-if="doc.source" class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-mono text-[10px]">{{ doc.source }}</span>
               </div>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+              <span class="px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200/60 font-mono text-[11px] shrink-0">
+                {{ doc.evidence_count }} 条证据
+              </span>
+            </div>
+
+            <!-- Real title -->
+            <h3
+              @click="openDocDrawer(doc)"
+              class="text-sm sm:text-base font-semibold text-slate-900 group-hover:text-sky-700 transition-colors cursor-pointer leading-snug"
+            >
+              {{ doc.title || '(无标题文献)' }}
+            </h3>
+
+            <!-- Authors -->
+            <div v-if="doc.authors.length" class="text-xs text-slate-500 italic line-clamp-1">
+              {{ doc.authors.slice(0, 6).join(', ') }}{{ doc.authors.length > 6 ? ' et al.' : '' }}
+            </div>
+
+            <!-- Abstract -->
+            <p v-if="doc.abstract" class="text-xs sm:text-sm text-slate-600 leading-relaxed line-clamp-2">
+              {{ doc.abstract }}
+            </p>
+
+            <!-- Footer: polarity counts + linked claims -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs border-t border-slate-100">
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="text-slate-600">
+                  <span class="text-slate-400">支持</span>
+                  <span class="ml-1 font-mono font-semibold text-emerald-700">{{ doc.support_count }}</span>
+                </span>
+                <span class="text-slate-600">
+                  <span class="text-slate-400">反驳</span>
+                  <span class="ml-1 font-mono font-semibold text-rose-700">{{ doc.contradict_count }}</span>
+                </span>
+                <span class="text-slate-600">
+                  <span class="text-slate-400">无效应</span>
+                  <span class="ml-1 font-mono font-semibold text-slate-700">{{ doc.no_effect_count }}</span>
+                </span>
+                <span class="text-slate-600">
+                  <span class="text-slate-400">不确定</span>
+                  <span class="ml-1 font-mono font-semibold text-amber-700">{{ doc.uncertain_count }}</span>
+                </span>
+              </div>
+
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span
+                  v-for="claim in doc.claims.slice(0, 2)"
+                  :key="claim.claim_id"
+                  class="px-2 py-0.5 rounded text-[11px] bg-slate-50 text-slate-600 border border-slate-200/60 font-mono max-w-[220px] truncate"
+                  :title="claim.canonical_signature"
+                >
+                  {{ shortSignature(claim.canonical_signature) }}
+                </span>
+                <span v-if="doc.claims.length > 2" class="text-[11px] text-slate-400 font-mono">
+                  +{{ doc.claims.length - 2 }}
+                </span>
+                <button
+                  @click="openDocDrawer(doc)"
+                  class="text-xs text-sky-600 hover:text-sky-800 font-medium ml-1 flex items-center gap-0.5 shrink-0"
+                >
+                  <span>文献详情与证据</span>
+                  <el-icon :size="12"><ArrowRight /></el-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="filteredDocuments.length === 0" class="p-12 text-center text-slate-400 text-xs">
+            {{ documents.length === 0 ? '暂无文献数据：请先启动一次挖掘管线。' : '没有匹配当前筛选条件的文献。' }}
+          </div>
+        </div>
+      </template>
     </div>
 
-    <!-- Evidence Detail Drawer -->
+    <!-- ==================== 命题证据抽屉 ==================== -->
     <el-drawer
       v-model="drawerVisible"
       title="证据溯源与审查"
-      size="600px"
+      size="640px"
       direction="rtl"
       :destroy-on-close="true"
     >
@@ -430,10 +537,10 @@
           </div>
         </div>
 
-        <!-- Grounded Evidence Spans (real, loaded on open) -->
+        <!-- Grounded Evidence Spans with highlight -->
         <div>
           <div class="flex items-center justify-between mb-2">
-            <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide">证据原文片段</h4>
+            <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide">证据原文片段（高亮定位）</h4>
             <span class="text-[11px] text-slate-400 font-mono">{{ evidenceSpans.length }} 条</span>
           </div>
 
@@ -446,37 +553,188 @@
             该断言暂无证据片段。
           </div>
 
-          <div v-else class="space-y-2.5">
+          <div v-else class="space-y-3">
             <div
               v-for="ev in evidenceSpans"
               :key="ev.evidence_id"
               class="p-3 rounded-lg border bg-white"
               :class="polarityBorderClass(ev.polarity)"
             >
-              <div class="flex flex-wrap items-center gap-1.5 mb-1.5 text-[11px]">
-                <span
-                  :class="['px-1.5 py-0.5 rounded font-medium', polarityChipClass(ev.polarity)]"
-                >{{ polarityLabel(ev.polarity) }}</span>
+              <div class="flex flex-wrap items-center gap-1.5 mb-2 text-[11px]">
+                <span :class="['px-1.5 py-0.5 rounded font-medium', polarityChipClass(ev.polarity)]">
+                  {{ polarityLabel(ev.polarity) }}
+                </span>
                 <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{{ reviewLabel(ev.review_status) }}</span>
-                <span v-if="ev.span?.section_path" class="font-mono text-slate-400">{{ ev.span.section_path }}</span>
-                <span v-if="ev.span" class="font-mono text-slate-400">[{{ ev.span.start_char }}:{{ ev.span.end_char }}]</span>
+                <span v-if="ev.document_title" class="text-slate-500 line-clamp-1 max-w-[260px]" :title="ev.document_title">
+                  {{ ev.document_title }}
+                </span>
               </div>
-              <p class="text-xs text-slate-800 leading-relaxed">
-                <span class="text-slate-400">"</span>{{ ev.span?.text }}<span class="text-slate-400">"</span>
+
+              <!-- 原文 + span 高亮 -->
+              <template v-if="ctxFor(ev)">
+                <SpanHighlight
+                  :canonical-text="ctxFor(ev)!.text"
+                  :start-char="ctxFor(ev)!.start"
+                  :end-char="ctxFor(ev)!.end"
+                />
+              </template>
+              <p v-else class="text-xs text-slate-800 leading-relaxed">
+                {{ ev.span?.text }}
               </p>
-              <div v-if="ev.statistics && Object.keys(ev.statistics).length" class="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-2">
-                <span
-                  v-for="(val, key) in ev.statistics"
-                  :key="key"
-                  class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-50 text-sky-800"
-                >{{ key }}: {{ typeof val === 'object' ? JSON.stringify(val) : val }}</span>
-              </div>
-              <div class="mt-2 text-[10px] font-mono text-slate-400">
-                doc {{ (ev.span?.document_version_id ?? '').slice(0, 8) }} · passage {{ ev.span?.passage_id?.slice(0, 8) }} · 偏移定位可溯源
+
+              <div class="mt-2 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                <span v-if="ev.span?.section_path">{{ ev.span.section_path }}</span>
+                <span v-if="ev.span">[{{ ev.span.start_char }}:{{ ev.span.end_char }}]</span>
+                <span v-if="ev.document_id">doc {{ ev.document_id.slice(0, 8) }}</span>
+                <button
+                  v-if="ev.document_id"
+                  @click="openDocById(ev.document_id)"
+                  class="ml-auto text-sky-600 hover:text-sky-800 font-medium"
+                >查看文献 →</button>
               </div>
             </div>
           </div>
         </div>
+      </div>
+    </el-drawer>
+
+    <!-- ==================== 文献详情抽屉 ==================== -->
+    <el-drawer
+      v-model="docDrawerVisible"
+      title="文献详情与证据溯源"
+      size="720px"
+      direction="rtl"
+      :destroy-on-close="true"
+    >
+      <div v-if="docDetail" class="space-y-5 text-slate-800">
+        <!-- Identifiers & links -->
+        <div>
+          <div class="flex flex-wrap items-center gap-2 text-xs mb-2">
+            <a
+              v-if="docDetail.pmid"
+              :href="'https://pubmed.ncbi.nlm.nih.gov/' + docDetail.pmid"
+              target="_blank"
+              class="px-2 py-1 rounded border border-slate-300 hover:bg-slate-50 text-sky-700 font-mono flex items-center gap-1"
+            >
+              <el-icon><Link /></el-icon> PMID: {{ docDetail.pmid }}
+            </a>
+            <a
+              v-if="docDetail.pmcid"
+              :href="'https://www.ncbi.nlm.nih.gov/pmc/articles/' + docDetail.pmcid + '/'"
+              target="_blank"
+              class="px-2 py-1 rounded border border-slate-300 hover:bg-slate-50 text-emerald-700 font-mono flex items-center gap-1"
+            >
+              <el-icon><Document /></el-icon> {{ docDetail.pmcid }}
+            </a>
+            <a
+              v-if="docDetail.doi"
+              :href="'https://doi.org/' + docDetail.doi"
+              target="_blank"
+              class="px-2 py-1 rounded border border-slate-300 hover:bg-slate-50 text-slate-600 font-mono flex items-center gap-1"
+            >
+              <el-icon><Link /></el-icon> DOI
+            </a>
+            <span class="text-slate-400 font-mono ml-auto">{{ docDetail.source }}</span>
+          </div>
+          <h2 class="text-base font-bold text-slate-900 leading-snug">
+            {{ docDetail.title || '(无标题文献)' }}
+          </h2>
+          <div class="text-xs text-slate-500 mt-1.5">
+            <span v-if="docDetail.journal" class="font-semibold text-slate-700">{{ docDetail.journal }}</span>
+            <span v-if="docDetail.year" class="ml-2 font-mono">{{ docDetail.year }}</span>
+            <div v-if="docDetail.authors.length" class="italic mt-1 line-clamp-2">
+              {{ docDetail.authors.join(', ') }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Polarity summary -->
+        <div class="bg-slate-50 rounded-lg p-3.5 border border-slate-200">
+          <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">证据极性汇总</h4>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span class="text-slate-400">证据总数:</span>
+              <span class="ml-1 font-mono font-semibold text-slate-800">{{ docDetail.evidence_count }}</span>
+            </div>
+            <div>
+              <span class="text-slate-400">关联命题:</span>
+              <span class="ml-1 font-mono font-semibold text-slate-800">{{ docDetail.claims.length }}</span>
+            </div>
+            <div>
+              <span class="text-slate-400">支持:</span>
+              <span class="ml-1 font-mono font-semibold text-emerald-700">{{ docDetail.support_count }}</span>
+            </div>
+            <div>
+              <span class="text-slate-400">反驳:</span>
+              <span class="ml-1 font-mono font-semibold text-rose-700">{{ docDetail.contradict_count }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Abstract -->
+        <div v-if="docDetail.abstract">
+          <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">摘要 (Abstract)</h4>
+          <div class="p-3 bg-slate-50/50 rounded-lg border border-slate-200 text-xs text-slate-700 leading-relaxed max-h-48 overflow-y-auto">
+            {{ docDetail.abstract }}
+          </div>
+        </div>
+
+        <!-- Linked claims -->
+        <div v-if="docDetail.claims.length">
+          <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">关联命题 ({{ docDetail.claims.length }})</h4>
+          <div class="space-y-1.5">
+            <div
+              v-for="claim in docDetail.claims"
+              :key="claim.claim_id"
+              class="p-2.5 rounded-lg border border-slate-200 bg-white text-xs flex items-center justify-between gap-2"
+            >
+              <span class="font-mono text-slate-700 line-clamp-1" :title="claim.canonical_signature">
+                {{ shortSignature(claim.canonical_signature) }}
+              </span>
+              <span class="flex items-center gap-2 font-mono text-[11px] shrink-0">
+                <span class="text-emerald-700">S{{ claim.support_count }}</span>
+                <span class="text-rose-700">C{{ claim.contradict_count }}</span>
+                <span class="text-amber-700">U{{ claim.uncertain_count }}</span>
+                <el-tag size="small" type="info" effect="plain">{{ statusLabel(claim.status) }}</el-tag>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Evidence spans with highlight -->
+        <div>
+          <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">
+            证据原文片段（高亮定位，{{ docDetail.evidence.length }} 条）
+          </h4>
+          <div class="space-y-3">
+            <div
+              v-for="ev in docDetail.evidence"
+              :key="ev.evidence_id"
+              class="p-3 rounded-lg border bg-white"
+              :class="polarityBorderClass(ev.polarity)"
+            >
+              <div class="flex flex-wrap items-center gap-1.5 mb-2 text-[11px]">
+                <span :class="['px-1.5 py-0.5 rounded font-medium', polarityChipClass(ev.polarity)]">
+                  {{ polarityLabel(ev.polarity) }}
+                </span>
+                <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{{ reviewLabel(ev.review_status) }}</span>
+                <span v-if="ev.section_path" class="font-mono text-slate-400">{{ ev.section_path }}</span>
+              </div>
+              <SpanHighlight
+                :canonical-text="ev.canonical_text || ev.span_text"
+                :start-char="ev.canonical_text ? ev.start_char : 0"
+                :end-char="ev.canonical_text ? ev.end_char : ev.span_text.length"
+              />
+              <div class="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2 text-[10px] font-mono text-slate-400">
+                <span class="line-clamp-1" :title="ev.claim_signature">{{ shortSignature(ev.claim_signature) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="p-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>正在加载文献详情...</span>
       </div>
     </el-drawer>
   </div>
@@ -485,10 +743,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { ElMessage } from 'element-plus';
+import SpanHighlight from './SpanHighlight.vue';
+import { agentApi, type DocumentDetail, type DocumentItem, type EvidenceSpanItem } from '@/api/client';
 import { useResearch } from '@/composables/useResearch';
 
 const {
-  papers, createAndRunSession, loading: researchLoading, error: researchError,
+  papers, documents, createAndRunSession, loading: researchLoading, error: researchError,
   selectClaim, evidenceSpans, clearError, refreshQueue, claimVersions,
   submitReviewDecision,
 } = useResearch();
@@ -498,11 +758,17 @@ const filterExpanded = ref(false);
 const viewMode = ref<'card' | 'table'>('card');
 const paperKeyword = ref('');
 const activeScreeningFilter = ref<'all' | 'included' | 'flagged' | 'excluded'>('all');
+/** 展示维度：按命题（claim 聚合） / 按文献（document） */
+const displayDim = ref<'claim' | 'document'>('claim');
 
-// Drawer State
+// Claim Drawer State
 const drawerVisible = ref(false);
 const selectedPaper = ref<(typeof papers.value)[0] | null>(null);
 const evidenceLoading = ref(false);
+
+// Document Drawer State
+const docDrawerVisible = ref(false);
+const docDetail = ref<DocumentDetail | null>(null);
 
 // Advanced filters (operate on real fields)
 const minDocuments = ref(0);
@@ -510,7 +776,7 @@ const onlyConflict = ref(false);
 const onlyValidated = ref(false);
 const sortBy = ref<'evidence' | 'support' | 'contradict' | 'documents'>('evidence');
 
-/** isSearching 与全局管线 loading 保持同步（不再持有过期 ref 引用） */
+/** isSearching 与全局管线 loading 保持同步 */
 const isSearching = computed(() => researchLoading.value);
 
 const includedCount = computed(() => papers.value.filter(p => p.screeningStatus === 'included').length);
@@ -560,7 +826,48 @@ const filteredPapers = computed(() => {
   return sorted;
 });
 
+const filteredDocuments = computed(() => {
+  const list = documents.value.filter(doc => {
+    if (minDocuments.value > 0 && doc.evidence_count < minDocuments.value) {
+      return false;
+    }
+    if (onlyConflict.value && doc.contradict_count === 0) {
+      return false;
+    }
+    if (paperKeyword.value) {
+      const q = paperKeyword.value.toLowerCase();
+      const match = doc.title.toLowerCase().includes(q) ||
+        doc.journal.toLowerCase().includes(q) ||
+        doc.abstract.toLowerCase().includes(q) ||
+        doc.pmid.includes(q) ||
+        doc.authors.join(' ').toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    return true;
+  });
+  const sorted = [...list];
+  sorted.sort((a, b) => {
+    switch (sortBy.value) {
+      case 'support': return b.support_count - a.support_count;
+      case 'contradict': return b.contradict_count - a.contradict_count;
+      case 'documents': return b.claims.length - a.claims.length;
+      default: return b.evidence_count - a.evidence_count;
+    }
+  });
+  return sorted;
+});
+
 type PaperRow = (typeof papers.value)[0];
+
+/** 规范签名缩短为 "Subject → Object" 形式用于窄容器展示 */
+function shortSignature(sig: string): string {
+  const parts = sig.split(' | ');
+  if (parts.length >= 3) {
+    const subj = parts[0].length > 24 ? parts[0].slice(0, 24) + '…' : parts[0];
+    return `${subj} → ${parts[2]}`;
+  }
+  return sig.length > 40 ? sig.slice(0, 40) + '…' : sig;
+}
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
@@ -604,12 +911,40 @@ function polarityBorderClass(polarity: string): string {
 function reviewLabel(status: string): string {
   const map: Record<string, string> = {
     PENDING: '待复核',
+    pending: '待复核',
     ACCEPTED: '已接受',
     EDIT_ACCEPT: '修订后接受',
     REJECTED: '已否决',
     NEEDS_REVIEW: '需人工',
   };
   return map[status] ?? status;
+}
+
+/**
+ * 计算 span 高亮窗口：原文过长时只取 span 前后各 ~200 字符，
+ * 返回窗口文本及 span 在窗口内的相对偏移。
+ */
+function highlightWindow(text: string, start: number, end: number, pad = 200): { text: string; start: number; end: number } | null {
+  if (!text) { return null; }
+  if (text.length <= pad * 2 + (end - start)) {
+    return { text, start, end };
+  }
+  const ws = Math.max(0, start - pad);
+  const we = Math.min(text.length, end + pad);
+  const prefix = ws > 0 ? '… ' : '';
+  const suffix = we < text.length ? ' …' : '';
+  return {
+    text: prefix + text.slice(ws, we) + suffix,
+    start: start - ws + prefix.length,
+    end: end - ws + prefix.length,
+  };
+}
+
+/** 命题抽屉：为每条证据计算高亮窗口（canonical_text 完整时窗口即全文） */
+function ctxFor(ev: EvidenceSpanItem) {
+  const text = ev.canonical_text ?? '';
+  if (!text || !ev.span) { return null; }
+  return highlightWindow(text, ev.span.start_char, ev.span.end_char);
 }
 
 function toggleFilterExpanded() {
@@ -624,7 +959,7 @@ async function handleSearch() {
   }
   try {
     await createAndRunSession(q);
-    ElMessage.success(`挖掘完成: 产出 ${papers.value.length} 条证据聚合命题`);
+    ElMessage.success(`挖掘完成: 产出 ${papers.value.length} 条命题、${documents.value.length} 篇文献`);
   } catch {
     ElMessage.error(researchError.value ?? '挖掘管线执行失败');
   }
@@ -641,7 +976,6 @@ async function submitReviewForStatus(paper: PaperRow, status: 'included' | 'flag
 
   let version = paper.claimVersion ?? 0;
   if (version < 1) {
-    // 版本号缺失：刷新复核队列后重取
     await refreshQueue();
     version = claimVersions.value.get(paper.id) ?? 0;
   }
@@ -675,6 +1009,28 @@ async function openPaperDrawer(paper: PaperRow) {
     await selectClaim(paper.id);
   } finally {
     evidenceLoading.value = false;
+  }
+}
+
+async function openDocDrawer(doc: DocumentItem) {
+  docDrawerVisible.value = true;
+  docDetail.value = null;
+  try {
+    docDetail.value = await agentApi.getDocument(doc.document_id);
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** 命题抽屉内跳转文献详情 */
+async function openDocById(documentId: string) {
+  drawerVisible.value = false;
+  docDrawerVisible.value = true;
+  docDetail.value = null;
+  try {
+    docDetail.value = await agentApi.getDocument(documentId);
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : String(err));
   }
 }
 </script>

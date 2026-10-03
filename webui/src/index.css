@@ -71,3 +71,20 @@
   border-radius: 4px !important;
   font-weight: 500;
 }
+
+/* Evidence span grounding highlight (SpanHighlight.vue <mark>) */
+mark.evidence-highlight {
+  background: linear-gradient(180deg, transparent 40%, #fde68a 40%);
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+  font-weight: 600;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.canonical-text {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #475569;
+}

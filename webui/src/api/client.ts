@@ -69,6 +69,7 @@ export interface EvidenceSpanItem {
   statistics?: Record<string, unknown> | null;
   study?: Record<string, unknown>;
   review_status: string;
+  document_id?: string;
   document_version_id?: string;
   document_title?: string;
   canonical_text?: string;
@@ -113,6 +114,54 @@ export interface AggregationItem {
   distinct_documents: number;
   reasons: string[];
   subject_name?: string;
+}
+
+export interface DocumentClaimEntry {
+  claim_id: string;
+  canonical_signature: string;
+  status: string;
+  predicate: string;
+  direction: string;
+  support_count: number;
+  contradict_count: number;
+  no_effect_count: number;
+  uncertain_count: number;
+}
+
+export interface DocumentItem {
+  document_id: string;
+  title: string;
+  journal: string;
+  year: number | null;
+  authors: string[];
+  abstract: string;
+  pmid: string;
+  pmcid: string;
+  doi: string;
+  source: string;
+  evidence_count: number;
+  support_count: number;
+  contradict_count: number;
+  no_effect_count: number;
+  uncertain_count: number;
+  claims: DocumentClaimEntry[];
+}
+
+export interface DocumentEvidenceEntry {
+  evidence_id: string;
+  claim_id: string;
+  claim_signature: string;
+  polarity: string;
+  section_path: string;
+  start_char: number;
+  end_char: number;
+  span_text: string;
+  review_status: string;
+  canonical_text: string;
+}
+
+export interface DocumentDetail extends DocumentItem {
+  evidence: DocumentEvidenceEntry[];
 }
 
 export class AgentApiError extends Error {
@@ -298,6 +347,12 @@ export const agentApi = {
 
   getAggregations: () =>
     request<{ aggregations: AggregationItem[] }>("/api/v1/verification/aggregations"),
+
+  listDocuments: (limit = 100) =>
+    request<{ documents: DocumentItem[] }>(`/api/v1/documents?limit=${limit}`),
+
+  getDocument: (documentId: string) =>
+    request<DocumentDetail>(`/api/v1/documents/${documentId}`),
 
   getCoverage: (sessionId: string) =>
     request<{

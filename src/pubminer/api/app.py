@@ -370,6 +370,7 @@ def create_app(container: Container) -> FastAPI:
                         study=ev.study.model_dump(mode="json"),
                         statistics=ev.statistics.model_dump(mode="json") if ev.statistics else None,
                         review_status=ev.review_status,
+                        document_id=str(ev.document_id),
                         document_version_id=str(ev.document_version_id),
                         document_title=version_row.title if version_row else "",
                         canonical_text=version_row.canonical_text if version_row else "",
@@ -382,6 +383,23 @@ def create_app(container: Container) -> FastAPI:
             )
 
     # ------------------------------------------------------------ 跨论文验证 / 覆盖 / 审核（PR-013）
+
+    @app.get("/api/v1/documents")
+    def list_documents(limit: int = 100) -> schemas.DocumentsResponse:
+        with session_scope(container.session_factory) as session:
+            repo = container.document_repository(session)
+            return schemas.DocumentsResponse(
+                documents=[schemas.DocumentItem(**d) for d in repo.list_documents_with_evidence(limit=limit)]
+            )
+
+    @app.get("/api/v1/documents/{document_id}")
+    def get_document(document_id: str) -> schemas.DocumentDetail:
+        with session_scope(container.session_factory) as session:
+            repo = container.document_repository(session)
+            detail = repo.get_document_detail(_parse_uuid(document_id, "document"))
+            if detail is None:
+                raise HTTPException(404, f"document {document_id} not found")
+            return schemas.DocumentDetail(**detail)
 
     @app.get("/api/v1/verification/aggregations")
     def verification_aggregations(limit: int = 200) -> schemas.AggregationsResponse:
