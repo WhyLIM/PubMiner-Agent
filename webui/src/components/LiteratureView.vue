@@ -402,7 +402,7 @@
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
-            :page-sizes="[20, 50, 100]"
+            :page-sizes="[10, 20, 50]"
             :total="filteredPapers.length"
             layout="sizes, prev, pager, next, jumper"
             background
@@ -436,7 +436,7 @@
 
             <!-- Real title -->
             <h3
-              @click="openDocDrawer(doc)"
+              @click="openDocById(doc.document_id)"
               class="text-sm sm:text-base font-semibold text-slate-900 group-hover:text-sky-700 transition-colors cursor-pointer leading-snug"
             >
               {{ doc.title || '(无标题文献)' }}
@@ -486,7 +486,7 @@
                   +{{ doc.claims.length - 2 }}
                 </span>
                 <button
-                  @click="openDocDrawer(doc)"
+                  @click="openDocById(doc.document_id)"
                   class="text-xs text-sky-600 hover:text-sky-800 font-medium ml-1 flex items-center gap-0.5 shrink-0"
                 >
                   <span>文献详情与证据</span>
@@ -622,7 +622,7 @@
                 <span v-if="ev.document_id">doc {{ ev.document_id.slice(0, 8) }}</span>
                 <button
                   v-if="ev.document_id"
-                  @click="openDocById(ev.document_id)"
+                  @click="openDocById(ev.document_id, { closeClaimDrawer: true })"
                   class="ml-auto text-sky-600 hover:text-sky-800 font-medium"
                 >查看文献 →</button>
               </div>
@@ -784,7 +784,7 @@ import { ref, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import SpanHighlight from './SpanHighlight.vue';
 import AgentWorkflowView from './AgentWorkflowView.vue';
-import { agentApi, type DocumentDetail, type DocumentEvidenceEntry, type DocumentItem, type EvidenceSpanItem } from '@/api/client';
+import { agentApi, type DocumentDetail, type DocumentEvidenceEntry, type EvidenceSpanItem } from '@/api/client';
 import { useResearch } from '@/composables/useResearch';
 
 const {
@@ -819,18 +819,6 @@ const sortBy = ref<'evidence' | 'support' | 'contradict' | 'documents'>('evidenc
 
 /** isSearching 仅在挖掘管线真正运行时为 true（而非任何接口加载） */
 const isSearching = computed(() => miningActive.value);
-
-// ---- 命题列表分页 ----
-const currentPage = ref(1);
-const pageSize = ref(20);
-const pagedPapers = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value;
-  return filteredPapers.value.slice(start, start + pageSize.value);
-});
-// 任一筛选条件变化时回到第一页
-watch([paperKeyword, activeScreeningFilter, minDocuments, onlyConflict, onlyValidated, sortBy, displayDim], () => {
-  currentPage.value = 1;
-});
 
 // ---- 管线执行监控面板 ----
 const wfLiveStatus = computed(() => taskStatus.value);
@@ -893,6 +881,23 @@ const filteredPapers = computed(() => {
     }
   });
   return sorted;
+});
+
+// ---- 命题列表分页（依赖 filteredPapers，必须声明在其后） ----
+const currentPage = ref(1);
+const pageSize = ref(10);
+const pagedPapers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredPapers.value.slice(start, start + pageSize.value);
+});
+// 任一筛选条件变化时回到第一页
+watch([paperKeyword, activeScreeningFilter, minDocuments, onlyConflict, onlyValidated, sortBy, displayDim], () => {
+  currentPage.value = 1;
+});
+// 数据刷新（复核提交/新挖掘）导致列表变短时，防止当前页超出范围出现空页
+watch(() => filteredPapers.value.length, (len) => {
+  const maxPage = Math.max(1, Math.ceil(len / pageSize.value));
+  if (currentPage.value > maxPage) { currentPage.value = 1; }
 });
 
 const filteredDocuments = computed(() => {
@@ -1088,19 +1093,9 @@ async function openPaperDrawer(paper: PaperRow) {
   }
 }
 
-async function openDocDrawer(doc: DocumentItem) {
-  docDrawerVisible.value = true;
-  docDetail.value = null;
-  try {
-    docDetail.value = await agentApi.getDocument(doc.document_id);
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : String(err));
-  }
-}
-
-/** 命题抽屉内跳转文献详情 */
-async function openDocById(documentId: string) {
-  drawerVisible.value = false;
+/** 打开文献抽屉（文献列表点击、命题抽屉内跳转共用；传入时关闭命题抽屉） */
+async function openDocById(documentId: string, { closeClaimDrawer = false } = {}) {
+  if (closeClaimDrawer) { drawerVisible.value = false; }
   docDrawerVisible.value = true;
   docDetail.value = null;
   try {

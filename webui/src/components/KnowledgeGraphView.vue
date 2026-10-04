@@ -166,9 +166,10 @@ const minWeight = ref(0);
 const searchKeyword = ref('');
 const selectedNode = ref<GraphNode | null>(null);
 
-// 类别集合来自 props（领域 schema 动态生成）；schema 变化时重置为全选
-watch(() => props.categories, (cats) => {
-  visibleCategories.value = cats.map(() => true);
+// 类别集合来自 props（领域 schema 动态生成）；仅在类别集合本身变化时重置为全选，
+// 数据刷新（复核提交等）重建数组但类别不变时，保留用户勾选状态
+watch(() => props.categories.map(c => c.key).join('|'), () => {
+  visibleCategories.value = props.categories.map(() => true);
 }, { immediate: true });
 
 function getCategoryName(category: number) {
