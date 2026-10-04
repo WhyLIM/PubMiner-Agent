@@ -72,8 +72,8 @@
       </div>
 
       <!-- Node / Sub-Network Inspector Side Panel -->
-      <div class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
-        <div v-if="selectedNode" class="space-y-4">
+      <div class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs flex flex-col">
+        <div v-if="selectedNode" class="space-y-4 flex-1 min-h-0 flex flex-col">
           <div>
             <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
               <span>实体详细探测</span>
@@ -99,10 +99,10 @@
             </div>
           </div>
 
-          <!-- Connected Triples -->
-          <div>
-            <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">直接关联三元组关系</h4>
-            <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+          <!-- Connected Triples（弹性占满面板剩余高度） -->
+          <div class="flex-1 min-h-0 flex flex-col">
+            <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2 shrink-0">直接关联三元组关系</h4>
+            <div class="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
               <div
                 v-for="(edge, idx) in connectedEdges"
                 :key="idx"
@@ -121,13 +121,13 @@
           </div>
         </div>
 
-        <div v-else class="text-center py-16 text-slate-400 text-xs space-y-2">
+        <div v-else class="flex-1 flex flex-col items-center justify-center text-center py-10 text-slate-400 text-xs space-y-2">
           <el-icon :size="28" class="text-slate-300"><Share /></el-icon>
           <p>在左侧力导向图谱中点击任意节点，查看实体关联分析与医学证据链。</p>
         </div>
 
         <!-- Quick Tips -->
-        <div class="pt-4 border-t border-slate-100 text-[11px] text-slate-400">
+        <div class="mt-4 pt-4 border-t border-slate-100 text-[11px] text-slate-400">
           <p>提示：支持滚轮缩放、拖拽节点物理重排，或在上方搜索框直接查找靶标。</p>
         </div>
       </div>
