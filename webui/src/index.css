@@ -103,3 +103,18 @@ mark.evidence-highlight {
 .el-radio-group {
   flex-wrap: nowrap;
 }
+
+/* EP checkbox 默认 margin-right: 30px，行内排布间距一律由容器 gap 控制 */
+.el-checkbox {
+  margin-right: 0;
+}
+
+/* 图谱页实体定位框：浅蓝底色提高辨识度 */
+.entity-locate-input .el-input__wrapper {
+  background-color: #f0f9ff;
+  box-shadow: 0 0 0 1px #bae6fd inset;
+}
+.entity-locate-input .el-input__wrapper.is-focus {
+  background-color: #ffffff;
+  box-shadow: 0 0 0 1px #38bdf8 inset;
+}

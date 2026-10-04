@@ -21,18 +21,28 @@
             size="small"
             class="w-24"
           />
-          <span class="font-mono text-slate-800 w-7 text-right">{{ minWeight }}</span>
+          <el-input-number
+            v-model="minWeight"
+            :min="0"
+            :max="10"
+            :step="0.5"
+            size="small"
+            controls-position="right"
+            style="width: 6.5rem"
+          />
         </div>
 
         <!-- Search & Actions -->
         <div class="flex items-center gap-2 flex-1 min-w-[240px] justify-end">
+          <span class="text-xs text-slate-500 whitespace-nowrap">定位:</span>
           <el-input
             v-model="searchKeyword"
-            placeholder="定位实体 (如 EGFR, Osimertinib)..."
+            placeholder="输入实体名 (如 EGFR, Osimertinib)..."
             prefix-icon="Search"
             size="small"
             clearable
-            style="width: 13rem"
+            class="entity-locate-input"
+            style="width: 14rem"
           />
           <div class="flex items-center gap-2 shrink-0">
             <el-button size="small" @click="resetGraphZoom" title="重置视角">
