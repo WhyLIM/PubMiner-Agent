@@ -23,6 +23,34 @@ def _identifier_values(doc: Document) -> dict[str, str]:
     return {i.kind: i.normalized().value for i in doc.identifiers}
 
 
+_POLARITY_KEY = {
+    "SUPPORT": "support_count",
+    "CONTRADICT": "contradict_count",
+    "NO_EFFECT": "no_effect_count",
+    "UNCERTAIN": "uncertain_count",
+}
+
+
+def _empty_claim_entry(claim) -> dict:
+    """claim 关联证据的极性计数条目（按 claim_id 聚合时复用）。"""
+    return {
+        "claim_id": str(claim.id),
+        "canonical_signature": claim.canonical_signature,
+        "status": claim.status,
+        "predicate": claim.predicate,
+        "direction": claim.direction,
+        "support_count": 0,
+        "contradict_count": 0,
+        "no_effect_count": 0,
+        "uncertain_count": 0,
+    }
+
+
+def _bump_claim_entry(claims_map: dict, ev, claim) -> None:
+    entry = claims_map.setdefault(claim.id, _empty_claim_entry(claim))
+    entry[_POLARITY_KEY[ev.polarity]] += 1
+
+
 class DocumentRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -64,27 +92,7 @@ class DocumentRepository:
             polarities = Counter(ev.polarity for ev, _ in doc_evidence)
             claims_map: dict[UUID, dict] = {}
             for ev, claim in doc_evidence:
-                entry = claims_map.setdefault(
-                    claim.id,
-                    {
-                        "claim_id": str(claim.id),
-                        "canonical_signature": claim.canonical_signature,
-                        "status": claim.status,
-                        "predicate": claim.predicate,
-                        "direction": claim.direction,
-                        "support_count": 0,
-                        "contradict_count": 0,
-                        "no_effect_count": 0,
-                        "uncertain_count": 0,
-                    },
-                )
-                key = {
-                    "SUPPORT": "support_count",
-                    "CONTRADICT": "contradict_count",
-                    "NO_EFFECT": "no_effect_count",
-                    "UNCERTAIN": "uncertain_count",
-                }[ev.polarity]
-                entry[key] += 1
+                _bump_claim_entry(claims_map, ev, claim)
             results.append(
                 {
                     "document_id": str(doc.id),
@@ -129,27 +137,7 @@ class DocumentRepository:
         evidence_items: list[dict] = []
         version_texts: dict[UUID, str] = {}
         for ev, claim in pairs:
-            entry = claims_map.setdefault(
-                claim.id,
-                {
-                    "claim_id": str(claim.id),
-                    "canonical_signature": claim.canonical_signature,
-                    "status": claim.status,
-                    "predicate": claim.predicate,
-                    "direction": claim.direction,
-                    "support_count": 0,
-                    "contradict_count": 0,
-                    "no_effect_count": 0,
-                    "uncertain_count": 0,
-                },
-            )
-            key = {
-                "SUPPORT": "support_count",
-                "CONTRADICT": "contradict_count",
-                "NO_EFFECT": "no_effect_count",
-                "UNCERTAIN": "uncertain_count",
-            }[ev.polarity]
-            entry[key] += 1
+            _bump_claim_entry(claims_map, ev, claim)
             if ev.document_version_id not in version_texts:
                 version_row = self.session.get(DocumentVersionRow, ev.document_version_id)
                 version_texts[ev.document_version_id] = version_row.canonical_text if version_row else ""

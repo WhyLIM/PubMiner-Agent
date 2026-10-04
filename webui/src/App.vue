@@ -257,7 +257,7 @@ async function submitCustomTopic() {
   }
   isCreatingTopic.value = true;
   customDialogVisible.value = false;
-  activeTab.value = 'workflow';
+  activeTab.value = 'literature';
   try {
     await research.createAndRunSession(q);
     ElMessage.success('课题已创建，挖掘管线执行完成');

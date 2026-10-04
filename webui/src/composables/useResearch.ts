@@ -59,8 +59,9 @@ const workflowPanelOpen = ref(false);
 
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let pollInFlight = false;
-
-const activeTab = ref('literature');
+/** 连续失败计数：达到上限后停止轮询，避免后端不可用时无限静默重试 */
+let pollFailures = 0;
+const MAX_POLL_FAILURES = 8;
 
 /** 规范签名格式: "MESH:C024903 | PROGNOSTIC | COLORECTAL_CANCER | HIGH" */
 function parseSignature(sig: string) {
@@ -266,11 +267,12 @@ async function refreshAll() {
 // ------------------------------------------------------------------ 轮询
 
 async function pollOnce(taskId: string): Promise<boolean> {
-  // 返回 true 表示已到终态
+  // 返回 true 表示已到终态（或已停止轮询）
   if (pollInFlight) { return false; }
   pollInFlight = true;
   try {
     const detail = await agentApi.getTask(taskId);
+    pollFailures = 0;
     taskStatus.value = detail.status;
     taskSteps.value = detail.steps;
     if (sessionId.value) {
@@ -282,12 +284,17 @@ async function pollOnce(taskId: string): Promise<boolean> {
     }
     if (TERMINAL_STATUSES.has(detail.status)) {
       stopPolling();
-      miningActive.value = false;
       await refreshAll();
       return true;
     }
     return false;
   } catch {
+    pollFailures += 1;
+    if (pollFailures >= MAX_POLL_FAILURES) {
+      stopPolling();
+      error.value = `任务状态轮询连续失败 ${pollFailures} 次，已停止自动刷新；请检查后端服务后手动重试`;
+      return true;
+    }
     return false; // 单次失败不中断轮询
   } finally {
     pollInFlight = false;
@@ -296,6 +303,7 @@ async function pollOnce(taskId: string): Promise<boolean> {
 
 function startPolling(taskId: string) {
   stopPolling();
+  pollFailures = 0;
   runningTaskId.value = taskId;
   lastEventSeq.value = 0;
   events.value = [];
@@ -392,12 +400,11 @@ export function useResearch() {
     sessionId, session, claims, aggregations, reviewQueue, tasks,
     evidenceSpans, selectedClaimId, loading, error, events, coverage,
     documents,
-    activeTab,
     papers, graphNodes, graphLinks, statCards, claimVersions,
     runningTaskId, taskStatus, taskSteps, miningActive, workflowPanelOpen,
     init, createAndRunSession, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
     refreshDocuments, refreshSession, refreshCoverage, refreshAll,
-    startPolling, stopPolling, runAndWait, clearError,
+    startPolling, runAndWait, clearError,
   };
 }

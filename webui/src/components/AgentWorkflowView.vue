@@ -25,7 +25,7 @@
       <div
         v-for="(step, index) in steps"
         :key="step.index"
-        @click="activeStepIndex = index"
+        @click="selectStep(index)"
         :class="[
           'p-3.5 rounded-lg border cursor-pointer transition-all flex flex-col justify-between',
           activeStepIndex === index
@@ -137,11 +137,13 @@ import { useResearch } from '@/composables/useResearch';
 
 const {
   sessionId, tasks, loading, error,
-  runningTaskId, taskStatus, taskSteps, events,
+  runningTaskId, taskSteps, events,
   refreshTasks, startPolling, runAndWait, clearError,
 } = useResearch();
 
 const activeStepIndex = ref(0);
+/** 用户手动点选步骤后，轮询不再自动跳到 RUNNING 步（新开一轮运行时重置） */
+const stepPinned = ref(false);
 /** 本地兜底步骤（无运行时轮询数据时展示最近一次任务） */
 const localSteps = ref<Array<{ index: number; type: string; status: string; error: string | null; output_summary?: Record<string, unknown> | null }>>([]);
 const taskId = ref<string | null>(null);
@@ -216,6 +218,7 @@ async function refreshSteps() {
 async function runPipeline() {
   loading.value = true;
   runError.value = null;
+  stepPinned.value = false;
   clearError();
   try {
     if (!sessionId.value) {
@@ -261,13 +264,18 @@ async function resumeTask() {
   }
 }
 
-// 轮询期间步骤实时更新；到终态后 composable 已 refreshAll
+// 轮询期间自动跟随 RUNNING 步（用户手动点选后停止跟随）；到终态后 composable 已 refreshAll
 watch(taskSteps, (s) => {
-  if (s.length && runningTaskId.value) {
+  if (s.length && runningTaskId.value && !stepPinned.value) {
     const idx = s.findIndex(x => x.status === 'RUNNING');
     if (idx >= 0) { activeStepIndex.value = idx; }
   }
 });
+
+function selectStep(index: number) {
+  stepPinned.value = true;
+  activeStepIndex.value = index;
+}
 
 onMounted(() => {
   void loadLatestTask();

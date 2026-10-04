@@ -309,10 +309,6 @@ function updateChart() {
   chartInstance.setOption(option, true);
 }
 
-function handleSearchEntity() {
-  updateChart();
-}
-
 function resetGraphZoom() {
   if (chartInstance) {
     chartInstance.dispatchAction({
@@ -335,7 +331,7 @@ function exportGraphImage() {
   ElMessage.success('知识图谱 PNG 高清图像导出成功');
 }
 
-watch([visibleCategories, minWeight], () => {
+watch([visibleCategories, minWeight, searchKeyword], () => {
   updateChart();
 }, { deep: true });
 

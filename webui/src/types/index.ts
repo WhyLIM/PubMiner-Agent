@@ -1,10 +1,3 @@
-export interface BiomedicalEntity {
-  id: string;
-  name: string;
-  type: 'gene' | 'disease' | 'drug' | 'pathway';
-  count: number;
-}
-
 export interface RelationalTriple {
   subject: string;
   predicate: string; // e.g., 'INHIBITS', 'MUTATES_TO', 'SYNERGIZES_WITH', 'ASSOCIATED_WITH'
@@ -66,18 +59,6 @@ export interface GraphLink {
   relation: string;
   weight: number;
   evidenceCount: number;
-}
-
-export interface AgentStep {
-  id: string;
-  agentName: string;
-  role: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  summary: string;
-  logs: string[];
-  durationMs: number;
-  metrics: Record<string, string | number>;
-  toolCalls?: { tool: string; args: string; result: string }[];
 }
 
 export interface ResearchTopic {
