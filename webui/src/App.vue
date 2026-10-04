@@ -75,12 +75,7 @@
         :topic="currentTopic"
       />
 
-      <!-- View 4: Multi-Agent Workflow Console -->
-      <AgentWorkflowView
-        v-else-if="activeTab === 'workflow'"
-      />
-
-      <!-- View 5: Systematic Review Synthesis & Grounded QA -->
+      <!-- View 4: Systematic Review Synthesis & Grounded QA -->
       <SynthesisReviewView
         v-else-if="activeTab === 'synthesis'"
         :topic="currentTopic"
@@ -158,7 +153,6 @@ import TopNav from './components/TopNav.vue';
 import LiteratureView from './components/LiteratureView.vue';
 import KnowledgeGraphView from './components/KnowledgeGraphView.vue';
 import AnalyticsView from './components/AnalyticsView.vue';
-import AgentWorkflowView from './components/AgentWorkflowView.vue';
 import SynthesisReviewView from './components/SynthesisReviewView.vue';
 import { Paper } from './types';
 import { ElMessage } from 'element-plus';
@@ -239,7 +233,9 @@ function handleSelectTopic(topicId: string) {
 }
 
 function handleTriggerAgent() {
-  activeTab.value = 'workflow';
+  // 协同中心已并入文献页的"管线执行监控"面板
+  activeTab.value = 'literature';
+  research.workflowPanelOpen.value = true;
 }
 
 // Custom Topic Modal

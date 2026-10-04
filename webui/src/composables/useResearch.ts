@@ -54,6 +54,8 @@ const taskSteps = ref<Array<{ index: number; type: string; status: string; error
 const lastEventSeq = ref(0);
 /** 挖掘管线真正在执行（轮询进行中）；与通用 loading 区分，避免页面初始化时误显示"执行中" */
 const miningActive = ref(false);
+/** 文献页内"管线执行监控"面板是否展开（跨组件共享，顶栏"运行 Agent"也能展开它） */
+const workflowPanelOpen = ref(false);
 
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let pollInFlight = false;
@@ -392,7 +394,7 @@ export function useResearch() {
     documents,
     activeTab,
     papers, graphNodes, graphLinks, statCards, claimVersions,
-    runningTaskId, taskStatus, taskSteps, miningActive,
+    runningTaskId, taskStatus, taskSteps, miningActive, workflowPanelOpen,
     init, createAndRunSession, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
     refreshDocuments, refreshSession, refreshCoverage, refreshAll,

@@ -118,6 +118,26 @@
       </div>
     </div>
 
+    <!-- 管线执行监控（可展开面板，替代独立"智能体协同中心"页） -->
+    <div class="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
+      <div
+        class="px-4 py-2.5 flex items-center justify-between gap-3 bg-slate-50/70 cursor-pointer select-none hover:bg-slate-50 transition-colors"
+        @click="workflowPanelOpen = !workflowPanelOpen"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <el-icon class="text-slate-400 transition-transform" :class="workflowPanelOpen ? 'rotate-180' : ''"><ArrowDown /></el-icon>
+          <span class="text-sm font-bold text-slate-800 shrink-0">管线执行监控</span>
+          <span v-if="miningActive" class="px-2 py-0.5 rounded bg-sky-50 text-sky-700 font-mono text-[11px] animate-pulse">执行中</span>
+          <span v-else-if="wfLiveStatus" :class="['px-2 py-0.5 rounded font-mono text-[11px]', wfStatusClass]">{{ wfLiveStatus }}</span>
+          <span v-if="taskSteps.length" class="font-mono text-[11px] text-slate-400">{{ wfSucceeded }}/{{ taskSteps.length }} 步完成</span>
+        </div>
+        <span class="text-[11px] text-slate-400 font-mono shrink-0">{{ workflowPanelOpen ? '收起' : '展开' }}</span>
+      </div>
+      <div v-show="workflowPanelOpen" class="p-4 border-t border-slate-100">
+        <AgentWorkflowView />
+      </div>
+    </div>
+
     <!-- Evidence List & Screening Board -->
     <div class="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
       <!-- Toolbar -->
@@ -742,9 +762,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import SpanHighlight from './SpanHighlight.vue';
+import AgentWorkflowView from './AgentWorkflowView.vue';
 import { agentApi, type DocumentDetail, type DocumentItem, type EvidenceSpanItem } from '@/api/client';
 import { useResearch } from '@/composables/useResearch';
 
@@ -752,6 +773,7 @@ const {
   papers, documents, createAndRunSession, miningActive, error: researchError,
   selectClaim, evidenceSpans, clearError, refreshQueue, claimVersions,
   submitReviewDecision,
+  workflowPanelOpen, taskStatus, taskSteps,
 } = useResearch();
 
 const searchQuery = ref('');
@@ -779,6 +801,22 @@ const sortBy = ref<'evidence' | 'support' | 'contradict' | 'documents'>('evidenc
 
 /** isSearching 仅在挖掘管线真正运行时为 true（而非任何接口加载） */
 const isSearching = computed(() => miningActive.value);
+
+// ---- 管线执行监控面板 ----
+const wfLiveStatus = computed(() => taskStatus.value);
+const wfSucceeded = computed(() => taskSteps.value.filter(s => s.status === 'SUCCEEDED').length);
+const wfStatusClass = computed(() => {
+  const s = wfLiveStatus.value;
+  if (!s) { return 'bg-slate-100 text-slate-600'; }
+  if (s === 'COMPLETED' || s === 'REVIEW_READY') { return 'bg-emerald-50 text-emerald-700'; }
+  if (s === 'FAILED' || s === 'CANCELLED') { return 'bg-rose-50 text-rose-700'; }
+  if (s === 'PARTIAL') { return 'bg-amber-50 text-amber-700'; }
+  return 'bg-sky-50 text-sky-700';
+});
+// 挖掘启动时自动展开面板，进度一目了然
+watch(miningActive, (v) => {
+  if (v) { workflowPanelOpen.value = true; }
+});
 
 const includedCount = computed(() => papers.value.filter(p => p.screeningStatus === 'included').length);
 const flaggedCount = computed(() => papers.value.filter(p => p.screeningStatus === 'flagged').length);

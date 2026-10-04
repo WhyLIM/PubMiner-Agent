@@ -1,35 +1,16 @@
 <template>
   <div class="space-y-4">
-    <!-- Header Controls -->
-    <div class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <div class="flex items-center gap-2">
-          <h2 class="text-base font-bold text-slate-900">挖掘管线执行中心</h2>
-          <span
-            v-if="liveStatus"
-            :class="[
-              'text-xs px-2 py-0.5 rounded font-mono font-medium',
-              isTerminal(liveStatus) && liveStatus !== 'FAILED' && liveStatus !== 'CANCELLED' ? 'bg-emerald-50 text-emerald-700' :
-              liveStatus === 'FAILED' ? 'bg-rose-50 text-rose-700' :
-              liveStatus === 'PARTIAL' ? 'bg-amber-50 text-amber-700' :
-              'bg-sky-50 text-sky-700 animate-pulse'
-            ]"
-          >{{ liveStatus }}</span>
-          <span v-if="steps.length" class="text-xs text-slate-400 font-mono">
-            {{ succeededCount }}/{{ steps.length }} 步完成
-          </span>
-        </div>
-        <p class="text-xs text-slate-500 mt-0.5">
-          检索 → 水合 → 筛选 → 抽取 → 归一化 → 验证 → 覆盖门控 → (引文扩展循环) → 聚合；运行期间每 3 秒自动刷新。
-        </p>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <el-button type="primary" @click="runPipeline" :loading="isRunning" :disabled="isRunning && !!runningTaskId">
+    <!-- Compact Toolbar（嵌入文献页面板，标题由外层面板提供） -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p class="text-xs text-slate-500 min-w-0">
+        检索 → 水合 → 筛选 → 抽取 → 归一化 → 验证 → 覆盖门控 → (引文扩展循环) → 聚合；运行期间每 3 秒自动刷新。
+      </p>
+      <div class="flex items-center gap-2 shrink-0">
+        <el-button type="primary" size="small" @click="runPipeline" :loading="isRunning" :disabled="isRunning && !!runningTaskId">
           <el-icon class="mr-1"><CaretRight /></el-icon>
           {{ isRunning ? '执行中...' : hasSession ? '恢复/重跑管线' : '创建会话并运行' }}
         </el-button>
-        <el-button size="default" @click="refreshSteps" :disabled="isRunning">
+        <el-button size="small" @click="refreshSteps" :disabled="isRunning">
           <el-icon class="mr-1"><RefreshRight /></el-icon>
           刷新状态
         </el-button>
@@ -161,16 +142,12 @@ const localSteps = ref<Array<{ index: number; type: string; status: string; erro
 const taskId = ref<string | null>(null);
 const runError = ref<string | null>(null);
 
-const TERMINAL = new Set(['COMPLETED', 'PARTIAL', 'REVIEW_READY', 'FAILED', 'CANCELLED']);
-
 const hasSession = computed(() => !!sessionId.value);
 const isRunning = computed(() => loading.value || !!runningTaskId.value);
-const liveStatus = computed(() => taskStatus.value ?? tasks.value[0]?.status ?? null);
 const steps = computed(() => (taskSteps.value.length ? taskSteps.value : localSteps.value));
 const activeStep = computed(() => steps.value[activeStepIndex.value] ?? null);
 /** W1 修复：从后端 run_steps.output_summary 直接获取步骤输出 */
 const stepOutput = computed(() => activeStep.value?.output_summary ?? null);
-const succeededCount = computed(() => steps.value.filter(s => s.status === 'SUCCEEDED').length);
 const displayError = computed(() => runError.value ?? error.value);
 
 /** W3：中文步骤名（HYDRATE2 等第二轮步骤去尾号后映射） */
@@ -187,10 +164,6 @@ function stepLabel(type: string): string {
     AGGREGATE: '证据聚合',
   };
   return map[type.replace(/\d+$/, '')] ?? type;
-}
-
-function isTerminal(status: string): boolean {
-  return TERMINAL.has(status);
 }
 
 async function loadLatestTask() {

@@ -130,7 +130,6 @@ const navItems = computed(() => [
   { key: 'literature', label: '文献检索挖掘', icon: 'Search', badge: `${props.paperCount}` },
   { key: 'graph', label: '知识图谱', icon: 'Share' },
   { key: 'analytics', label: '多维学术分析', icon: 'DataAnalysis' },
-  { key: 'workflow', label: '智能体协同中心', icon: 'Cpu' },
   { key: 'synthesis', label: '证据合成综述', icon: 'Document' },
 ]);
 
