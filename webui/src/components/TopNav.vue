@@ -9,7 +9,7 @@
         <span class="text-base font-bold tracking-tight text-slate-900 font-sans">
           PubMiner<span class="text-sky-600 font-normal">-Agent</span>
         </span>
-        <span class="hidden md:inline text-xs text-slate-400 font-mono">v2.4 Biomedical Intelligence</span>
+        <span class="hidden md:inline text-xs text-slate-400 font-mono">v{{ appVersion }}</span>
       </div>
     </div>
 
@@ -111,6 +111,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { ResearchTopic } from '../types';
+
+/** 构建时注入的版本号（单一来源：package.json，与后端 pyproject.toml 对齐） */
+const appVersion = __APP_VERSION__;
 
 const props = defineProps<{
   activeTab: string;
