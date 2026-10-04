@@ -52,6 +52,8 @@ const runningTaskId = ref<string | null>(null);
 const taskStatus = ref<string | null>(null);
 const taskSteps = ref<Array<{ index: number; type: string; status: string; error: string | null; output_summary?: Record<string, unknown> | null }>>([]);
 const lastEventSeq = ref(0);
+/** 挖掘管线真正在执行（轮询进行中）；与通用 loading 区分，避免页面初始化时误显示"执行中" */
+const miningActive = ref(false);
 
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let pollInFlight = false;
@@ -278,6 +280,7 @@ async function pollOnce(taskId: string): Promise<boolean> {
     }
     if (TERMINAL_STATUSES.has(detail.status)) {
       stopPolling();
+      miningActive.value = false;
       await refreshAll();
       return true;
     }
@@ -294,6 +297,7 @@ function startPolling(taskId: string) {
   runningTaskId.value = taskId;
   lastEventSeq.value = 0;
   events.value = [];
+  miningActive.value = true;
   void pollOnce(taskId);
   pollHandle = setInterval(() => { void pollOnce(taskId); }, POLL_INTERVAL);
 }
@@ -303,6 +307,7 @@ function stopPolling() {
     clearInterval(pollHandle);
     pollHandle = null;
   }
+  miningActive.value = false;
 }
 
 /** 运行指定会话并轮询至终态（不负责创建/批准计划） */
@@ -387,7 +392,7 @@ export function useResearch() {
     documents,
     activeTab,
     papers, graphNodes, graphLinks, statCards, claimVersions,
-    runningTaskId, taskStatus, taskSteps,
+    runningTaskId, taskStatus, taskSteps, miningActive,
     init, createAndRunSession, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
     refreshDocuments, refreshSession, refreshCoverage, refreshAll,

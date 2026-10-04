@@ -88,3 +88,18 @@ mark.evidence-highlight {
   line-height: 1.7;
   color: #475569;
 }
+
+/* Element Plus 相邻按钮默认 margin-left: 12px，与父容器 flex gap 叠加导致间距不齐；
+   统一去掉，间距一律由父容器 gap 控制（按钮组内部保留拼接边框的负边距） */
+.el-button + .el-button {
+  margin-left: 0;
+}
+
+.el-button-group > .el-button + .el-button {
+  margin-left: -1px;
+}
+
+/* EP radio-group 默认 flex-wrap: wrap，工具栏空间紧张时按钮会折行 */
+.el-radio-group {
+  flex-wrap: nowrap;
+}

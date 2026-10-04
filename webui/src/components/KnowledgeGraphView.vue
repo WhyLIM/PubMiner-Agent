@@ -32,7 +32,7 @@
             prefix-icon="Search"
             size="small"
             clearable
-            class="w-44 sm:w-52"
+            style="width: 13rem"
           />
           <el-button-group size="small" class="shrink-0">
             <el-button @click="resetGraphZoom" title="重置视角">

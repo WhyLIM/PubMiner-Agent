@@ -12,41 +12,43 @@
       @export-report="handleExportReport"
     />
 
-    <!-- Sub-header Breadcrumb & Session Banner -->
+    <!-- Sub-header: 真实会话上下文（状态 / 规模 / 课题） -->
     <section class="border-b border-slate-200 bg-white px-4 sm:px-6 py-3">
       <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div class="flex items-center gap-2 text-xs text-slate-400 font-mono">
-            <span>PROJECT WORKSPACE</span>
-            <span aria-hidden="true">/</span>
-            <span class="text-sky-700 font-semibold">PUBMINER</span>
-            <span aria-hidden="true">/</span>
-            <span class="text-slate-500 font-sans">PubMed & PMC Active Session</span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 text-xs flex-wrap">
+            <span :class="['px-2 py-0.5 rounded font-mono text-[11px] font-medium', statusBadgeClass]">
+              {{ sessionStatus ?? 'NO SESSION' }}
+            </span>
+            <span v-if="shortSessionId !== '—'" class="font-mono text-slate-400">会话 {{ shortSessionId }}</span>
+            <span aria-hidden="true" class="text-slate-300">·</span>
+            <span class="text-slate-500"><span class="font-mono font-semibold text-slate-700">{{ paperCount }}</span> 命题</span>
+            <span aria-hidden="true" class="text-slate-300">·</span>
+            <span class="text-slate-500"><span class="font-mono font-semibold text-slate-700">{{ docCount }}</span> 篇文献</span>
+            <span aria-hidden="true" class="text-slate-300">·</span>
+            <span class="text-slate-500"><span class="font-mono font-semibold text-slate-700">{{ totalEvidence }}</span> 条证据</span>
           </div>
-          <h1 class="text-lg sm:text-xl font-bold text-slate-900 mt-0.5 tracking-tight flex items-center gap-2">
-            <span class="line-clamp-1">{{ currentTopic.title }}</span>
+          <h1 class="text-lg sm:text-xl font-bold text-slate-900 mt-1 tracking-tight truncate">
+            {{ currentTopic.title }}
           </h1>
-          <p class="text-xs text-slate-500 mt-0.5 max-w-4xl line-clamp-1 font-sans">
-            确定性管线：检索 → 筛选 → 抽取 → 归一化 → 验证 → 聚合；结果以证据原文片段溯源。
+          <p class="text-xs text-slate-500 mt-0.5 truncate">
+            {{ taskSpecLine }}
           </p>
         </div>
 
-        <div class="flex items-center gap-3 shrink-0 text-xs">
-          <!-- Live session info -->
-          <div class="hidden xl:flex items-center gap-1.5 text-slate-400">
-            <span>会话:</span>
-            <span class="font-mono text-slate-600">{{ shortSessionId }}</span>
-            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono text-[11px]">
-              {{ sessionStatus ?? 'NO SESSION' }}
-            </span>
-          </div>
-
-          <!-- Quick Action: Switch to Synthesis -->
+        <div class="flex items-center gap-2 shrink-0">
           <button
-            @click="activeTab = 'synthesis'"
+            @click="customDialogVisible = true"
             class="px-3 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 transition-colors font-medium text-xs"
           >
-            <el-icon class="text-sky-600"><Document /></el-icon>
+            <el-icon><Plus /></el-icon>
+            <span>新课题</span>
+          </button>
+          <button
+            @click="activeTab = 'synthesis'"
+            class="px-3 py-1.5 rounded-md border border-sky-200 bg-sky-50/60 hover:bg-sky-50 text-sky-800 flex items-center gap-1.5 transition-colors font-medium text-xs"
+          >
+            <el-icon><Document /></el-icon>
             <span>综述报告 ({{ includedCount }} 条已批准)</span>
           </button>
         </div>
@@ -205,6 +207,24 @@ const topics = computed(() => [currentTopic.value]);
 const shortSessionId = computed(() => (research.session.value?.session_id ?? '').slice(0, 8) || '—');
 const sessionStatus = computed(() => research.session.value?.status ?? null);
 const includedCount = computed(() => research.papers.value.filter(p => p.screeningStatus === 'included').length);
+const paperCount = computed(() => research.papers.value.length);
+const docCount = computed(() => research.documents.value.length);
+const totalEvidence = computed(() => research.papers.value.reduce((s, p) => s + (p.evidenceCount ?? 0), 0));
+const statusBadgeClass = computed(() => {
+  const s = sessionStatus.value;
+  if (!s) { return 'bg-slate-100 text-slate-500'; }
+  if (s === 'COMPLETED' || s === 'REVIEW_READY') { return 'bg-emerald-50 text-emerald-700'; }
+  if (s === 'FAILED') { return 'bg-rose-50 text-rose-700'; }
+  if (s === 'PARTIAL' || s === 'LIMITED') { return 'bg-amber-50 text-amber-700'; }
+  return 'bg-sky-50 text-sky-700';
+});
+const taskSpecLine = computed(() => {
+  const spec = research.session.value?.task_spec;
+  if (spec && (spec.task || spec.disease)) {
+    return `研究任务: ${spec.task ?? '—'} · 疾病: ${spec.disease ?? '—'}`;
+  }
+  return '确定性管线：检索 → 筛选 → 抽取 → 归一化 → 验证 → 聚合；结果以证据原文片段溯源。';
+});
 
 onMounted(() => {
   void research.init();

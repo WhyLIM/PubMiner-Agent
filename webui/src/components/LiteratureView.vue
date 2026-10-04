@@ -121,8 +121,8 @@
     <!-- Evidence List & Screening Board -->
     <div class="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
       <!-- Toolbar -->
-      <div class="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70">
-        <div class="flex items-center gap-1 flex-wrap">
+      <div class="px-4 py-3 border-b border-slate-200 flex flex-nowrap items-center justify-between gap-3 bg-slate-50/70 overflow-x-auto">
+        <div class="flex items-center gap-1 shrink-0">
           <template v-if="displayDim === 'claim'">
             <button
               v-for="tab in screeningTabs"
@@ -146,9 +146,9 @@
           </span>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+        <div class="flex items-center gap-3 shrink-0 flex-nowrap">
           <!-- 展示维度切换：按命题 / 按文献 -->
-          <el-radio-group v-model="displayDim" size="small">
+          <el-radio-group v-model="displayDim" size="small" class="shrink-0">
             <el-radio-button value="claim">按命题</el-radio-button>
             <el-radio-button value="document">按文献</el-radio-button>
           </el-radio-group>
@@ -158,16 +158,17 @@
             prefix-icon="Search"
             size="small"
             clearable
-            class="w-44 sm:w-56"
+            style="width: 11rem"
           />
-          <el-button-group v-if="displayDim === 'claim'" size="small">
-            <el-button :type="viewMode === 'card' ? 'primary' : 'default'" @click="viewMode = 'card'">
-              <el-icon><Menu /></el-icon>
-            </el-button>
-            <el-button :type="viewMode === 'table' ? 'primary' : 'default'" @click="viewMode = 'table'">
-              <el-icon><Tickets /></el-icon>
-            </el-button>
-          </el-button-group>
+          <!-- 视图切换：与维度切换同款分段样式 -->
+          <el-radio-group v-if="displayDim === 'claim'" v-model="viewMode" size="small" class="shrink-0">
+            <el-radio-button value="card">
+              <span class="flex items-center gap-1"><el-icon><Menu /></el-icon>卡片</span>
+            </el-radio-button>
+            <el-radio-button value="table">
+              <span class="flex items-center gap-1"><el-icon><Tickets /></el-icon>列表</span>
+            </el-radio-button>
+          </el-radio-group>
         </div>
       </div>
 
@@ -748,7 +749,7 @@ import { agentApi, type DocumentDetail, type DocumentItem, type EvidenceSpanItem
 import { useResearch } from '@/composables/useResearch';
 
 const {
-  papers, documents, createAndRunSession, loading: researchLoading, error: researchError,
+  papers, documents, createAndRunSession, miningActive, error: researchError,
   selectClaim, evidenceSpans, clearError, refreshQueue, claimVersions,
   submitReviewDecision,
 } = useResearch();
@@ -776,8 +777,8 @@ const onlyConflict = ref(false);
 const onlyValidated = ref(false);
 const sortBy = ref<'evidence' | 'support' | 'contradict' | 'documents'>('evidence');
 
-/** isSearching 与全局管线 loading 保持同步 */
-const isSearching = computed(() => researchLoading.value);
+/** isSearching 仅在挖掘管线真正运行时为 true（而非任何接口加载） */
+const isSearching = computed(() => miningActive.value);
 
 const includedCount = computed(() => papers.value.filter(p => p.screeningStatus === 'included').length);
 const flaggedCount = computed(() => papers.value.filter(p => p.screeningStatus === 'flagged').length);
