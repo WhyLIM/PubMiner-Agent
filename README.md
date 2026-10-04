@@ -5,7 +5,8 @@
 ## 特性
 
 - **一键研究**：一句话目标 → LLM 解析约束（含歧义追问）→ 检索 → 三级筛选 → 结构化抽取 → 归一化 → 验证 → 独立验证检测 → 聚合
-- **证据锚定**：每条结论绑定论文原文 span（固定 offset + content hash），UI 点击即高亮定位
+- **证据锚定**：每条结论绑定论文原文 span（固定 offset + content hash），UI 在完整原文上下文中高亮定位，可跳转文献详情与 PubMed/DOI 原文
+- **命题 / 文献双视图**：按聚合命题或按文献真实题录（标题/期刊/年份/PMID/PMCID）浏览同一批证据，带分页与高级过滤
 - **三级筛选级联**：embedding 余弦预筛（万级跳过 80%）→ LLM 摘要筛选 → UNCERTAIN 全文重筛
 - **span 二次修复**：LLM 改写导致 span 定位失败时，自动用 mention 锚定窗口重新摘录
 - **双源归一化**：NCBI Gene + PubTator 3 交叉验证，缩写歧义自动送审，标识符只来自 resolver
@@ -20,7 +21,7 @@
 ## 架构
 
 ```
-webui (Vue 3 + Element Plus + ECharts，明暗双主题)
+webui (Vue 3 + Element Plus + ECharts 工作台)
    │  /api/v1
 pubminer (FastAPI)
    ├─ agents/         有界 Orchestrator · 停止策略 · 覆盖评估
@@ -51,6 +52,8 @@ schemas/
 
 换研究领域 = 新建一个 JSON 文件 + `.env` 设 `PUBMINER_LLM_DOMAIN=新领域名`。
 
+领域 schema 同时驱动知识图谱的节点分类与图例：subject 按实体类型（GENE/PROTEIN/CLINICAL_MARKER/…）细分着色，object 侧标签取自 schema 的 `object_label` 字段。
+
 支持 LLM 自动生成领域 schema：描述你的研究领域，Agent 生成完整的 JSON 定义（含解释），预览确认后保存到 `schemas/` 目录。
 
 详见 [docs/domain-schema-spec.md](docs/domain-schema-spec.md)。
@@ -77,11 +80,16 @@ pnpm install
 pnpm dev                          # http://localhost:3001
 ```
 
-| 页面 | 功能 |
+单页工作台，四个视图 + 可展开的管线监控面板：
+
+| 视图 | 功能 |
 |---|---|
-| `/` 总览 | 统计卡片 + ECharts 极性/优先级图 + 最近任务 + 待审 TOP |
-| `/agent` 工作台 | 一键研究 · 检索式预览/编辑/保存 · 行动轨迹 · 证据高亮 · 覆盖矩阵 · 历史会话切换 |
-| `/review` 审核台 | 冲突优先队列 · 原文 span 高亮 · 多选批量操作 · 乐观锁 |
+| 文献检索挖掘 | 输入研究问题启动挖掘 · 按命题/按文献双视图 · 分页与高级过滤 · 批准/待定/否决复核 · 可展开"管线执行监控"面板（14 步状态/输出摘要/事件流/断点恢复） |
+| 知识图谱 | 力导向实体关系图 · 节点按实体类型着色（图例跟随领域 schema）· 类型筛选 · 实体定位 · 导出 PNG |
+| 多维学术分析 | 证据强度堆叠图 · 实体关联热力图 · 极性分布 · 支持证据排行 |
+| 证据合成综述 | 自动生成 Markdown 综述（含覆盖度评估）· 证据溯源问答（本地证据检索 + 原文片段） |
+
+证据抽屉（命题/文献均可展开）：极性汇总 · 完整原文上下文中的 span 高亮 · 偏移与文档溯源 · PubMed/PMCID/DOI 外链。
 
 ### 3. 或命令行一键研究
 
@@ -128,10 +136,9 @@ pnpm dev                          # http://localhost:3001
 │   └── extraction_fields/  # 抽取字段（colorectal / generic / …）
 ├── migrations/          # Alembic 0001–0007
 ├── tests/               # 统一测试套件
-├── docs/                # ADR + 领域 Schema 规范
+├── docs/                # 领域 Schema 规范
 ├── examples/            # 离线演示
 ├── scripts/             # LLM 连通性探针
-├── docs/domain-schema-spec.md  # Schema 规范
 └── .env.example         # 环境变量模板
 ```
 
