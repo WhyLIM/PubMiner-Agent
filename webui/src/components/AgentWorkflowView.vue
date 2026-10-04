@@ -3,7 +3,7 @@
     <!-- Compact Toolbar（嵌入文献页面板，标题由外层面板提供） -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <p class="text-xs text-slate-500 min-w-0">
-        检索 → 水合 → 筛选 → 抽取 → 归一化 → 验证 → 覆盖门控 → (引文扩展循环) → 聚合；运行期间每 3 秒自动刷新。
+        检索 → 获取原文 → 筛选 → 抽取 → 归一化 → 验证 → 覆盖门控 → (引文扩展循环) → 聚合；运行期间每 3 秒自动刷新。
       </p>
       <div class="flex items-center gap-2 shrink-0">
         <el-button type="primary" size="small" @click="runPipeline" :loading="isRunning" :disabled="isRunning && !!runningTaskId">
@@ -177,7 +177,7 @@ watch(() => activeStepIndex.value, () => {
 function stepLabel(type: string): string {
   const map: Record<string, string> = {
     SEARCH: '文献检索',
-    HYDRATE: '全文水合',
+    HYDRATE: '获取原文',
     SCREEN: '三层筛选',
     EXTRACT: '断言抽取',
     NORMALIZE: '实体归一化',
