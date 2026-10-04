@@ -34,15 +34,15 @@
             clearable
             style="width: 13rem"
           />
-          <el-button-group size="small" class="shrink-0">
-            <el-button @click="resetGraphZoom" title="重置视角">
+          <div class="flex items-center gap-2 shrink-0">
+            <el-button size="small" @click="resetGraphZoom" title="重置视角">
               <el-icon><Refresh /></el-icon>
             </el-button>
-            <el-button type="primary" @click="exportGraphImage" title="导出高分辨率图像">
+            <el-button type="primary" size="small" @click="exportGraphImage" title="导出高分辨率图像">
               <el-icon class="mr-0.5"><Download /></el-icon>
               <span>导出 PNG</span>
             </el-button>
-          </el-button-group>
+          </div>
         </div>
       </div>
     </div>
