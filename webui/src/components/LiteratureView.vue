@@ -195,11 +195,11 @@
       <!-- ==================== 按命题 ==================== -->
       <template v-if="displayDim === 'claim'">
         <!-- Card Mode View -->
-        <div v-if="viewMode === 'card'" class="divide-y divide-slate-100">
+        <div v-if="viewMode === 'card'" class="p-3 space-y-3 bg-slate-50/60">
           <div
             v-for="paper in pagedPapers"
             :key="paper.id"
-            class="p-4 sm:p-5 hover:bg-slate-50/60 transition-colors flex flex-col gap-3 group"
+            class="p-4 sm:p-5 bg-white border border-slate-200 rounded-lg shadow-xs hover:border-sky-300 hover:shadow-sm transition-all flex flex-col gap-3 group"
           >
             <!-- Metadata Kicker Line -->
             <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
@@ -266,7 +266,7 @@
             <!-- Title -->
             <h3
               @click="openPaperDrawer(paper)"
-              class="text-sm sm:text-base font-semibold text-slate-900 group-hover:text-sky-700 transition-colors cursor-pointer leading-snug font-mono"
+              class="text-sm sm:text-base font-semibold text-sky-800 group-hover:text-sky-600 transition-colors cursor-pointer leading-snug font-mono"
             >
               {{ paper.title }}
             </h3>
@@ -412,11 +412,11 @@
 
       <!-- ==================== 按文献 ==================== -->
       <template v-else>
-        <div class="divide-y divide-slate-100">
+        <div class="p-3 space-y-3 bg-slate-50/60">
           <div
             v-for="doc in filteredDocuments"
             :key="doc.document_id"
-            class="p-4 sm:p-5 hover:bg-slate-50/60 transition-colors flex flex-col gap-3 group"
+            class="p-4 sm:p-5 bg-white border border-slate-200 rounded-lg shadow-xs hover:border-sky-300 hover:shadow-sm transition-all flex flex-col gap-3 group"
           >
             <!-- Kicker: identifiers + journal -->
             <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
@@ -437,7 +437,7 @@
             <!-- Real title -->
             <h3
               @click="openDocById(doc.document_id)"
-              class="text-sm sm:text-base font-semibold text-slate-900 group-hover:text-sky-700 transition-colors cursor-pointer leading-snug"
+              class="text-sm sm:text-base font-semibold text-sky-800 group-hover:text-sky-600 transition-colors cursor-pointer leading-snug"
             >
               {{ doc.title || '(无标题文献)' }}
             </h3>
