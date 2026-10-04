@@ -259,10 +259,11 @@ async function submitCustomTopic() {
   customDialogVisible.value = false;
   activeTab.value = 'literature';
   try {
-    await research.createAndRunSession(q);
-    ElMessage.success('课题已创建，挖掘管线执行完成');
+    // 两段式启动：进入“研究目标确认”对话（AskHuman 澄清 + 检索式预览）
+    await research.startGoalSetup(q);
+    ElMessage.success('课题已创建，请在“研究目标确认”面板中完成确认');
   } catch {
-    ElMessage.error(research.error.value ?? '挖掘管线执行失败');
+    ElMessage.error(research.error.value ?? '会话创建失败');
   } finally {
     isCreatingTopic.value = false;
   }

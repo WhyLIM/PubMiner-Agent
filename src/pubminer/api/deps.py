@@ -132,6 +132,8 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
             ports.normalize, container.session_factory,
             resolver_name=f"composite@{container.pipeline_release}",
         )
+        # goal parser 同时暴露给 API 层（parse-goal 端点检查 container.goal_parser）
+        container.goal_parser = goal_parser
 
     # embedding service（万级文献筛选预过滤）
     llm_key = env.get("PUBMINER_LLM_API_KEY", "")

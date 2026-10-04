@@ -73,6 +73,72 @@
       </div>
     </div>
 
+    <!-- 研究目标确认（AskHuman 对话式澄清 + 检索式预览） -->
+    <div v-if="setup" class="bg-white rounded-lg border border-sky-200 shadow-xs overflow-hidden">
+      <div class="px-4 py-2.5 flex items-center justify-between bg-sky-50/70 border-b border-sky-100">
+        <div class="flex items-center gap-2">
+          <el-icon class="text-sky-600"><ChatDotRound /></el-icon>
+          <span class="text-sm font-bold text-slate-800">研究目标确认</span>
+          <span class="text-[11px] font-mono text-slate-400">{{ setupPhaseLabel }}</span>
+        </div>
+        <el-button size="small" text :disabled="setup.phase === 'running'" @click="closeSetup">取消</el-button>
+      </div>
+
+      <div class="flex flex-col h-[400px]">
+        <!-- 对话区 -->
+        <div ref="setupChatRef" class="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
+          <div
+            v-for="(m, i) in setup.messages"
+            :key="i"
+            :class="[
+              'p-3 rounded-lg leading-relaxed whitespace-pre-line',
+              m.sender === 'user'
+                ? 'ml-10 bg-sky-600 text-white'
+                : 'mr-10 bg-slate-50 border border-slate-200 text-slate-800'
+            ]"
+          >{{ m.text }}</div>
+          <div v-if="setup.phase === 'parsing'" class="text-slate-400 flex items-center gap-2 mr-10">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            <span>解析中…</span>
+          </div>
+        </div>
+
+        <!-- 检索式预览 / 编辑 + 主操作（无检索式时也可跳过/默认执行） -->
+        <div v-if="setup.phase !== 'running' && setup.phase !== 'parsing'" class="border-t border-slate-100 p-3 space-y-2">
+          <div v-if="setup.intents.length" class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">检索式（可直接编辑）</div>
+          <div v-else class="text-[11px] text-slate-400">尚未生成检索式；补充信息后会自动重新生成，也可按默认参数直接执行。</div>
+          <div v-for="(si, i) in setup.intents" :key="i" class="space-y-0.5">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-slate-500 w-24 shrink-0 truncate" :title="si.name">{{ si.name }}</span>
+              <el-input v-model="si.query" size="small" class="font-mono" />
+            </div>
+            <div v-if="si.explanation" class="text-[11px] text-slate-400 pl-[6.5rem]">{{ si.explanation }}</div>
+          </div>
+          <div class="flex items-center justify-between pt-1 gap-2">
+            <span v-if="setup.phase === 'clarify'" class="text-[11px] text-amber-600">
+              还有待确认的信息；可直接回答上方问题，或跳过追问。
+            </span>
+            <span v-else class="text-[11px] text-slate-400">确认无误即可开始挖掘。</span>
+            <div class="ml-auto flex items-center gap-2 shrink-0">
+              <el-button v-if="setup.phase === 'clarify'" size="small" @click="skipClarify">跳过追问</el-button>
+              <el-button type="primary" size="small" @click="runSetup">开始挖掘</el-button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 追问回答输入 -->
+        <div v-if="setup.phase === 'clarify'" class="border-t border-slate-100 p-3 flex gap-2">
+          <el-input
+            v-model="setupInput"
+            placeholder="用自然语言回答（如：胰腺癌，关注预后，2020 年以来）…"
+            size="small"
+            @keyup.enter="sendClar"
+          />
+          <el-button type="primary" size="small" @click="sendClar">发送</el-button>
+        </div>
+      </div>
+    </div>
+
     <!-- Error from composable -->
     <el-alert
       v-if="researchError"
@@ -780,7 +846,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
 import SpanHighlight from './SpanHighlight.vue';
 import AgentWorkflowView from './AgentWorkflowView.vue';
@@ -788,10 +854,11 @@ import { agentApi, type DocumentDetail, type DocumentEvidenceEntry, type Evidenc
 import { useResearch } from '@/composables/useResearch';
 
 const {
-  papers, documents, createAndRunSession, miningActive, error: researchError,
+  papers, documents, miningActive, error: researchError,
   selectClaim, evidenceSpans, clearError, refreshQueue, claimVersions,
   submitReviewDecision,
   workflowPanelOpen, taskStatus, taskSteps,
+  setup, startGoalSetup, sendClarification, confirmAndRun, closeSetup,
 } = useResearch();
 
 const searchQuery = ref('');
@@ -1039,7 +1106,54 @@ async function handleSearch() {
     return;
   }
   try {
-    await createAndRunSession(q);
+    // 两段式启动：解析目标（+ AskHuman 澄清）→ 确认检索式后开跑
+    await startGoalSetup(q);
+    await nextTick();
+    scrollSetupChat();
+  } catch {
+    ElMessage.error(researchError.value ?? '会话创建失败');
+  }
+}
+
+// ---- 研究目标确认对话 ----
+const setupInput = ref('');
+const setupChatRef = ref<HTMLDivElement | null>(null);
+const setupPhaseLabel = computed(() => {
+  switch (setup.value?.phase) {
+    case 'parsing': return '解析中';
+    case 'clarify': return '等待你的回答';
+    case 'ready': return '待确认';
+    case 'running': return '挖掘执行中';
+    default: return '';
+  }
+});
+
+function scrollSetupChat() {
+  const el = setupChatRef.value;
+  if (el) { el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }
+}
+
+async function sendClar() {
+  const t = setupInput.value.trim();
+  if (!t) { return; }
+  setupInput.value = '';
+  await sendClarification(t);
+  await nextTick();
+  scrollSetupChat();
+}
+
+function skipClarify() {
+  if (!setup.value) { return; }
+  setup.value.rounds = 99;
+  setup.value.phase = 'ready';
+  setup.value.messages.push({ sender: 'ai', text: '已跳过追问，将按当前解析结果执行（缺失字段使用默认值）。' });
+  void nextTick(scrollSetupChat);
+}
+
+async function runSetup() {
+  workflowPanelOpen.value = true; // 启动即展开监控，进度可见
+  try {
+    await confirmAndRun();
     ElMessage.success(`挖掘完成: 产出 ${papers.value.length} 条命题、${documents.value.length} 篇文献`);
   } catch {
     ElMessage.error(researchError.value ?? '挖掘管线执行失败');

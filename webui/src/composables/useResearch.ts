@@ -4,7 +4,7 @@
  * 生命周期：App.vue 挂载时调 init() 加载已有 session 和 claims。
  * 各视图通过 computed 消费状态，通过 actions 触发管线。
  *
- * 运行期：runSession/createAndRunSession 启动管线后进入轮询
+ * 运行期：startGoalSetup（含 AskHuman 澄清）→ confirmAndRun 启动管线后进入轮询
  * （3s 间隔拉取 task 步骤状态 + 事件流），直至终态后刷新全部数据。
  */
 import { computed, ref } from 'vue';
@@ -58,6 +58,24 @@ const lastEventSeq = ref(0);
 const miningActive = ref(false);
 /** 文献页内"管线执行监控"面板是否展开（跨组件共享，顶栏"运行 Agent"也能展开它） */
 const workflowPanelOpen = ref(false);
+
+// ---- 研究准备（AskHuman 对话式澄清 + 检索式确认） ----
+export interface SetupChatMessage {
+  sender: 'ai' | 'user';
+  text: string;
+}
+export interface SetupState {
+  open: boolean;
+  /** parsing: LLM 解析中 | clarify: 等待用户回答追问 | ready: 可确认开跑 | running: 已启动 */
+  phase: 'parsing' | 'clarify' | 'ready' | 'running';
+  goal: string;
+  messages: SetupChatMessage[];
+  fields: Record<string, unknown>;
+  intents: Array<{ name: string; query: string; explanation: string }>;
+  /** 已进行的追问轮数（上限 3，避免循环） */
+  rounds: number;
+}
+const setup = ref<SetupState | null>(null);
 
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let pollInFlight = false;
@@ -396,43 +414,143 @@ async function runAndWait(sessionIdValue: string, body: Parameters<typeof agentA
 
 // ------------------------------------------------------------------ 动作
 
-async function createAndRunSession(goal: string, disease?: string) {
-  loading.value = true;
-  error.value = null;
+// ------------------------------------------------------------------ 研究准备（AskHuman）
+
+const MAX_CLARIFY_ROUNDS = 3;
+const FIELD_LABELS: Record<string, string> = {
+  disease: '研究对象疾病/主题',
+  task: '研究任务类型（预后 / 诊断 / 预测等）',
+  year_from: '起始年份',
+  year_to: '截止年份',
+  validation_requirement: '验证要求',
+};
+
+function buildGoalSummary(fields: Record<string, unknown>, intents: Array<{ name: string; query: string; explanation: string }>): string {
+  const lines: string[] = [];
+  const parts: string[] = [];
+  if (fields.disease) { parts.push(`疾病：${fields.disease}`); }
+  if (fields.task) { parts.push(`任务类型：${fields.task}`); }
+  if (fields.year_from) { parts.push(`起始年份：${fields.year_from}`); }
+  if (fields.year_to) { parts.push(`截止年份：${fields.year_to}`); }
+  lines.push(parts.length ? `已解析你的研究目标：\n- ${parts.join('\n- ')}` : '已解析你的研究目标（未识别出结构化字段，将按默认参数执行）。');
+  if (intents.length) {
+    lines.push('');
+    lines.push('生成的检索式：');
+    intents.forEach((si, i) => {
+      lines.push(`${i + 1}. ${si.query}${si.explanation ? ` —— ${si.explanation}` : ''}`);
+    });
+    lines.push('检索式可在下方直接修改。');
+  }
+  return lines.join('\n');
+}
+
+/** 启动研究准备：创建会话并解析目标；需要澄清时进入对话追问 */
+async function startGoalSetup(goal: string): Promise<void> {
+  setup.value = {
+    open: true,
+    phase: 'parsing',
+    goal,
+    messages: [{ sender: 'ai', text: '正在解析你的研究目标…' }],
+    fields: {},
+    intents: [],
+    rounds: 0,
+  };
+  workflowPanelOpen.value = false;
   try {
     const created = await agentApi.createSession({ goal, user_id: 'webui' });
     sessionId.value = created.session_id;
     localStorage.setItem(SESSION_KEY, created.session_id);
+    await applyParse();
+  } catch (err) {
+    setup.value = null;
+    error.value = describe(err);
+    throw err;
+  }
+}
 
-    // Parse goal (LLM)
-    let specFields: Record<string, unknown> = {};
-    try {
-      specFields = (await agentApi.parseGoal(created.session_id)).fields;
-    } catch { /* LLM 不可用时跳过 */ }
+/** 调 parse-goal 并把解析结果 / 追问转成对话消息 */
+async function applyParse() {
+  const s = setup.value;
+  if (!s || !sessionId.value) { return; }
+  s.phase = 'parsing';
+  try {
+    const res = await agentApi.parseGoal(sessionId.value);
+    s.fields = res.fields ?? {};
+    s.intents = res.search_intents ?? [];
+    s.messages.push({ sender: 'ai', text: buildGoalSummary(s.fields, s.intents) });
+    // 追问触发：LLM 判定需要澄清，或存在缺失的必填字段（确定性信号）
+    const clarification = res.clarification ?? {};
+    const missing = res.missing_required_fields ?? [];
+    const llmWantsClarify = clarification.needed && clarification.question;
+    const missingFields = missing.filter(f => !(f in s.fields));
+    if ((llmWantsClarify || missingFields.length > 0) && s.rounds < MAX_CLARIFY_ROUNDS) {
+      s.rounds += 1;
+      s.phase = 'clarify';
+      const question = llmWantsClarify
+        ? String(clarification.question)
+        : '请补充以下信息，以便生成有效的检索式：\n- ' + missingFields.map(f => FIELD_LABELS[f] ?? f).join('\n- ');
+      s.messages.push({ sender: 'ai', text: question });
+    } else {
+      s.phase = 'ready';
+      if (s.rounds >= MAX_CLARIFY_ROUNDS) {
+        s.messages.push({ sender: 'ai', text: '已达追问上限，将按当前解析结果执行。' });
+      }
+    }
+  } catch {
+    // LLM 不可用：不阻断流程，走默认参数
+    s.phase = 'ready';
+    s.messages.push({ sender: 'ai', text: '目标解析服务暂不可用（未配置 LLM 或服务异常）。可直接用默认参数开始挖掘，或检查 .env 中的 LLM 配置后重试。' });
+  }
+}
 
-    // Approve plan
-    const plan = await agentApi.submitPlan(created.session_id, {
+/** 用户在对话中回答追问：存入会话后重新解析 */
+async function sendClarification(text: string): Promise<void> {
+  const s = setup.value;
+  if (!s || !sessionId.value || !text.trim() || s.phase !== 'clarify') { return; }
+  s.messages.push({ sender: 'user', text: text.trim() });
+  s.phase = 'parsing';
+  try {
+    await agentApi.answerClarification(sessionId.value, text.trim());
+  } catch { /* 存储失败不阻断重解析 */ }
+  await applyParse();
+}
+
+/** 确认检索式并开始挖掘：保存检索式 → 批准计划 → 运行管线至终态 */
+async function confirmAndRun(): Promise<void> {
+  const s = setup.value;
+  if (!s || !sessionId.value) { return; }
+  s.phase = 'running';
+  loading.value = true;
+  error.value = null;
+  try {
+    if (s.intents.length) {
+      await agentApi.saveSearchIntents(sessionId.value, s.intents).catch(() => undefined);
+    }
+    const plan = await agentApi.submitPlan(sessionId.value, {
       rationale: 'auto: discovery -> extract -> verify',
       steps: [
         { id: 's1', action_type: 'SEARCH', status: 'pending' },
         { id: 's2', action_type: 'EXTRACT', status: 'pending' },
       ],
     });
-    await agentApi.approvePlan(created.session_id, plan.plan_version);
-
-    // Run mining + poll to terminal state
-    const task = await runAndWait(created.session_id, {
-      disease: disease || (specFields.disease as string) || null,
-      task: 'prognostic_biomarker',
+    await agentApi.approvePlan(sessionId.value, plan.plan_version);
+    await runAndWait(sessionId.value, {
+      disease: (s.fields.disease as string) || null,
+      task: (s.fields.task as string) || 'prognostic_biomarker',
       max_results: 50,
     });
-    return task;
+    setup.value = null;
   } catch (err) {
     error.value = describe(err);
+    s.phase = 'ready';
     throw err;
   } finally {
     loading.value = false;
   }
+}
+
+function closeSetup() {
+  setup.value = null;
 }
 
 async function selectClaim(claimId: string) {
@@ -466,9 +584,11 @@ export function useResearch() {
     domains, graphCategories,
     papers, graphNodes, graphLinks, statCards, claimVersions,
     runningTaskId, taskStatus, taskSteps, miningActive, workflowPanelOpen,
-    init, createAndRunSession, selectClaim, submitReviewDecision,
+    setup,
+    init, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
     refreshDocuments, refreshSession, refreshCoverage, refreshAll,
     startPolling, runAndWait, clearError,
+    startGoalSetup, sendClarification, confirmAndRun, closeSetup,
   };
 }

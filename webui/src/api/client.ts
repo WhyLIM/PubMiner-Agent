@@ -230,8 +230,25 @@ export const agentApi = {
     request<{
       bound: boolean;
       fields: Record<string, unknown>;
+      search_intents: Array<{ name: string; query: string; explanation: string }>;
+      clarification: { needed?: boolean; question?: string } & Record<string, unknown>;
       missing_required_fields: string[];
     }>(`/api/v1/agent/sessions/${sessionId}/parse-goal`, { method: "POST" }),
+
+  answerClarification: (sessionId: string, answer: string) =>
+    request<{ ok: boolean; hint: string }>(
+      `/api/v1/agent/sessions/${sessionId}/answer`,
+      { method: "POST", body: JSON.stringify({ answer }) },
+    ),
+
+  saveSearchIntents: (
+    sessionId: string,
+    searchIntents: Array<{ name: string; query: string; explanation?: string }>,
+  ) =>
+    request<{ ok: boolean; count: number }>(
+      `/api/v1/agent/sessions/${sessionId}/search-intents`,
+      { method: "POST", body: JSON.stringify({ search_intents: searchIntents }) },
+    ),
 
   runSession: (sessionId: string, body: {
     disease?: string | null;
