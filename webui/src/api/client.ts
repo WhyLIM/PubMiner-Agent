@@ -376,8 +376,8 @@ export const agentApi = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
-  getAggregations: () =>
-    request<{ aggregations: AggregationItem[] }>("/api/v1/verification/aggregations"),
+  getAggregations: (limit = 1000) =>
+    request<{ aggregations: AggregationItem[] }>(`/api/v1/verification/aggregations?limit=${limit}`),
 
   listDomains: () =>
     request<{ domains: DomainInfo[] }>("/api/v1/domains"),

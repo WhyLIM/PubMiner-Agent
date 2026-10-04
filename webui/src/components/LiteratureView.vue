@@ -480,7 +480,7 @@
       <template v-else>
         <div class="p-3 space-y-3 bg-slate-50/60">
           <div
-            v-for="doc in filteredDocuments"
+            v-for="doc in pagedDocuments"
             :key="doc.document_id"
             class="p-4 sm:p-5 bg-white border border-slate-200 rounded-lg shadow-xs hover:border-sky-300 hover:shadow-sm transition-all flex flex-col gap-3 group"
           >
@@ -565,6 +565,19 @@
           <div v-if="filteredDocuments.length === 0" class="p-12 text-center text-slate-400 text-xs">
             {{ documents.length === 0 ? '暂无文献数据：请先启动一次挖掘管线。' : '没有匹配当前筛选条件的文献。' }}
           </div>
+        </div>
+
+        <!-- Pagination -->
+        <div v-if="filteredDocuments.length > 0" class="px-4 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <span class="text-xs text-slate-400">共 {{ filteredDocuments.length }} 篇文献</span>
+          <el-pagination
+            v-model:current-page="docPage"
+            v-model:page-size="docPageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="filteredDocuments.length"
+            layout="sizes, prev, pager, next, jumper"
+            background
+          />
         </div>
       </template>
     </div>
@@ -996,6 +1009,21 @@ const filteredDocuments = computed(() => {
     }
   });
   return sorted;
+});
+
+// ---- 文献列表分页（依赖 filteredDocuments，必须声明在其后） ----
+const docPage = ref(1);
+const docPageSize = ref(10);
+const pagedDocuments = computed(() => {
+  const start = (docPage.value - 1) * docPageSize.value;
+  return filteredDocuments.value.slice(start, start + docPageSize.value);
+});
+watch([paperKeyword, minDocuments, onlyConflict, sortBy, displayDim], () => {
+  docPage.value = 1;
+});
+watch(() => filteredDocuments.value.length, (len) => {
+  const maxPage = Math.max(1, Math.ceil(len / docPageSize.value));
+  if (docPage.value > maxPage) { docPage.value = 1; }
 });
 
 type PaperRow = (typeof papers.value)[0];

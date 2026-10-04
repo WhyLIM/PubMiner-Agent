@@ -295,11 +295,11 @@ async function refreshClaims() {
 }
 
 async function refreshAggregations() {
-  aggregations.value = (await agentApi.getAggregations()).aggregations;
+  aggregations.value = (await agentApi.getAggregations(1000)).aggregations;
 }
 
 async function refreshDocuments() {
-  documents.value = (await agentApi.listDocuments(100)).documents;
+  documents.value = (await agentApi.listDocuments(1000)).documents;
 }
 
 async function refreshDomains() {
