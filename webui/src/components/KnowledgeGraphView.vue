@@ -82,8 +82,8 @@
         </div>
       </div>
 
-      <!-- Node / Sub-Network Inspector Side Panel -->
-      <div class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs flex flex-col">
+      <!-- Node / Sub-Network Inspector Side Panel（与图谱画布等高，关系多时列表内滚动） -->
+      <div class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs flex flex-col lg:h-[598px]">
         <div v-if="selectedNode" class="space-y-4 flex-1 min-h-0 flex flex-col">
           <div>
             <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
@@ -110,10 +110,10 @@
             </div>
           </div>
 
-          <!-- Connected Triples（弹性占满面板剩余高度） -->
+          <!-- Connected Triples（面板内滚动：小屏限高，lg 屏占满剩余高度） -->
           <div class="flex-1 min-h-0 flex flex-col">
             <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2 shrink-0">直接关联三元组关系</h4>
-            <div class="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
+            <div class="max-h-56 lg:max-h-none lg:flex-1 lg:min-h-0 space-y-1.5 overflow-y-auto pr-1">
               <div
                 v-for="(edge, idx) in connectedEdges"
                 :key="idx"

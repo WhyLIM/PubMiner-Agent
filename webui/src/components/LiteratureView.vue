@@ -197,7 +197,7 @@
         <!-- Card Mode View -->
         <div v-if="viewMode === 'card'" class="divide-y divide-slate-100">
           <div
-            v-for="paper in filteredPapers"
+            v-for="paper in pagedPapers"
             :key="paper.id"
             class="p-4 sm:p-5 hover:bg-slate-50/60 transition-colors flex flex-col gap-3 group"
           >
@@ -319,7 +319,7 @@
 
         <!-- Table Mode View -->
         <div v-else class="overflow-x-auto">
-          <el-table :data="filteredPapers" stripe style="width: 100%">
+          <el-table :data="pagedPapers" stripe style="width: 100%">
             <el-table-column label="断言 ID" width="110">
               <template #default="{ row }">
                 <span class="font-mono text-xs text-sky-700 font-medium">{{ row.id.slice(0, 8) }}</span>
@@ -394,6 +394,19 @@
               </template>
             </el-table-column>
           </el-table>
+        </div>
+
+        <!-- Pagination -->
+        <div v-if="filteredPapers.length > 0" class="px-4 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <span class="text-xs text-slate-400">共 {{ filteredPapers.length }} 条命题</span>
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[20, 50, 100]"
+            :total="filteredPapers.length"
+            layout="sizes, prev, pager, next, jumper"
+            background
+          />
         </div>
       </template>
 
@@ -806,6 +819,18 @@ const sortBy = ref<'evidence' | 'support' | 'contradict' | 'documents'>('evidenc
 
 /** isSearching 仅在挖掘管线真正运行时为 true（而非任何接口加载） */
 const isSearching = computed(() => miningActive.value);
+
+// ---- 命题列表分页 ----
+const currentPage = ref(1);
+const pageSize = ref(20);
+const pagedPapers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredPapers.value.slice(start, start + pageSize.value);
+});
+// 任一筛选条件变化时回到第一页
+watch([paperKeyword, activeScreeningFilter, minDocuments, onlyConflict, onlyValidated, sortBy, displayDim], () => {
+  currentPage.value = 1;
+});
 
 // ---- 管线执行监控面板 ----
 const wfLiveStatus = computed(() => taskStatus.value);
