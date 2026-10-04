@@ -28,6 +28,7 @@ class DomainDefinition:
     screen_hints: str
     extraction_fields_schema: str | None = None
     export_mappings: dict[str, dict] = field(default_factory=dict)
+    object_label: str = ""
 
     @property
     def iv_min_documents(self) -> int:
@@ -70,6 +71,7 @@ def load_domain(path: str | Path) -> DomainDefinition:
         screen_hints=data.get("screen_hints", ""),
         extraction_fields_schema=data.get("extraction_fields_schema"),
         export_mappings=data.get("export_mappings", {}),
+        object_label=data.get("object_label", ""),
     )
 
 

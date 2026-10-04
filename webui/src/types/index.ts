@@ -43,10 +43,16 @@ export interface Paper {
   claimVersion?: number;
 }
 
+export interface GraphCategory {
+  key: string;
+  label: string;
+  color: string;
+}
+
 export interface GraphNode {
   id: string;
   name: string;
-  category: 0 | 1 | 2 | 3; // 0: Gene/Target, 1: Disease, 2: Drug, 3: Pathway
+  category: number;
   symbolSize: number;
   value: number;
   color?: string;

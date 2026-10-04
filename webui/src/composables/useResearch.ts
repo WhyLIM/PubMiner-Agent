@@ -17,6 +17,7 @@ import {
   type ReviewQueueItem,
   type TaskListItem,
   type DocumentItem,
+  type DomainInfo,
 } from '@/api/client';
 
 const SESSION_KEY = 'pubminer-session-id';
@@ -31,6 +32,7 @@ const session = ref<SessionResource | null>(null);
 const claims = ref<ClaimItem[]>([]);
 const aggregations = ref<AggregationItem[]>([]);
 const documents = ref<DocumentItem[]>([]);
+const domains = ref<DomainInfo[]>([]);
 const reviewQueue = ref<ReviewQueueItem[]>([]);
 const tasks = ref<TaskListItem[]>([]);
 const evidenceSpans = ref<EvidenceSpanItem[]>([]);
@@ -137,17 +139,71 @@ const claimVersions = computed(() => {
   return map;
 });
 
+// ---- 图谱分类：跟随领域 schema 动态生成（subject 按实体类型细分，object 固定末位） ----
+const OBJECT_CATEGORY_KEY = '__OBJECT__';
+const DEFAULT_SUBJECT_TYPES = ['GENE', 'PROTEIN', 'CLINICAL_MARKER', 'METABOLITE', 'OTHER'];
+const TYPE_LABELS_ZH: Record<string, string> = {
+  GENE: '基因',
+  PROTEIN: '蛋白质',
+  CLINICAL_MARKER: '临床标志物',
+  METABOLITE: '代谢物',
+  DRUG: '药物',
+  TARGET: '靶点蛋白',
+  PATHWAY: '通路',
+  VARIANT: '变异',
+  PROCESS: '生物过程',
+  SPECIES: '物种',
+  OTHER: '其他',
+};
+const CATEGORY_PALETTE = ['#0284c7', '#0d9488', '#8b5cf6', '#d97706', '#0ea5e9', '#64748b', '#7c3aed', '#f59e0b'];
+
+/** 活跃领域：按会话任务匹配 schema 的 default_task，回退 biomarker，再回退首个 */
+const activeDomain = computed<DomainInfo | null>(() => {
+  if (!domains.value.length) { return null; }
+  const task = session.value?.task_spec?.task;
+  if (task) {
+    const byTask = domains.value.find(d => d.default_task === task);
+    if (byTask) { return byTask; }
+  }
+  return domains.value.find(d => d.name === 'biomarker') ?? domains.value[0];
+});
+
+const graphCategories = computed(() => {
+  const domain = activeDomain.value;
+  const subjectTypes = domain && domain.entity_types.length
+    ? domain.entity_types
+    : DEFAULT_SUBJECT_TYPES.map(key => ({ key, label: key.toLowerCase() }));
+  const cats = subjectTypes.map((t, i) => ({
+    key: t.key.toUpperCase(),
+    label: TYPE_LABELS_ZH[t.key.toUpperCase()] ?? t.label,
+    color: CATEGORY_PALETTE[i % CATEGORY_PALETTE.length],
+  }));
+  cats.push({
+    key: OBJECT_CATEGORY_KEY,
+    label: domain?.object_label || '疾病/临床结局',
+    color: '#e11d48',
+  });
+  return cats;
+});
+
 const graphNodes = computed(() => {
-  // category 0: 生物标志物 (subject)；category 1: 疾病/临床结局 (object)
+  const typeIdx = new Map<string, number>();
+  graphCategories.value.forEach((c, i) => {
+    if (c.key !== OBJECT_CATEGORY_KEY) { typeIdx.set(c.key, i); }
+  });
+  const otherIdx = typeIdx.get('OTHER') ?? 0;
+  const objectIdx = graphCategories.value.length - 1;
+
   const valueOf = new Map<string, number>();
-  const nameOf = new Map<string, { name: string; category: 0 | 1 }>();
+  const nameOf = new Map<string, { name: string; category: number }>();
   for (const agg of aggregations.value) {
     const sig = parseSignature(agg.canonical_signature);
     const subject = prettySubject(sig.subject, agg.subject_name);
     const object = sig.object;
     const weight = agg.support_count + agg.contradict_count + agg.no_effect_count + agg.uncertain_count;
-    nameOf.set(subject, { name: subject, category: 0 });
-    nameOf.set(object, { name: object, category: 1 });
+    const st = (agg.subject_type ?? '').toUpperCase();
+    nameOf.set(subject, { name: subject, category: typeIdx.get(st) ?? otherIdx });
+    nameOf.set(object, { name: object, category: objectIdx });
     valueOf.set(subject, (valueOf.get(subject) ?? 0) + weight);
     valueOf.set(object, (valueOf.get(object) ?? 0) + weight);
   }
@@ -204,6 +260,7 @@ async function init() {
       refreshQueue(),
       refreshTasks(),
       refreshDocuments(),
+      refreshDomains(),
     ]);
     if (sessionId.value) {
       await refreshSession();
@@ -225,6 +282,12 @@ async function refreshAggregations() {
 
 async function refreshDocuments() {
   documents.value = (await agentApi.listDocuments(100)).documents;
+}
+
+async function refreshDomains() {
+  try {
+    domains.value = (await agentApi.listDomains()).domains;
+  } catch { /* 领域信息不可用时使用前端默认分类 */ }
 }
 
 async function refreshQueue() {
@@ -400,6 +463,7 @@ export function useResearch() {
     sessionId, session, claims, aggregations, reviewQueue, tasks,
     evidenceSpans, selectedClaimId, loading, error, events, coverage,
     documents,
+    domains, graphCategories,
     papers, graphNodes, graphLinks, statCards, claimVersions,
     runningTaskId, taskStatus, taskSteps, miningActive, workflowPanelOpen,
     init, createAndRunSession, selectClaim, submitReviewDecision,

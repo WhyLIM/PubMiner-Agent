@@ -3,11 +3,16 @@
     <!-- Graph Control Header Bar -->
     <div class="bg-white rounded-lg border border-slate-200 p-4 shadow-xs">
       <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <!-- Entity Category Filters -->
+        <!-- Entity Category Filters（图例跟随领域 schema 动态生成） -->
         <div class="flex items-center gap-2 flex-wrap shrink-0">
           <span class="text-xs font-semibold text-slate-700 whitespace-nowrap">实体类型:</span>
-          <el-checkbox v-model="visibleCategories[0]" label="生物标志物 (Subject)" size="small" />
-          <el-checkbox v-model="visibleCategories[1]" label="疾病/临床结局 (Object)" size="small" />
+          <el-checkbox
+            v-for="(cat, i) in categories"
+            :key="cat.key"
+            v-model="visibleCategories[i]"
+            :label="cat.label"
+            size="small"
+          />
         </div>
 
         <!-- Co-occurrence Strength -->
@@ -67,16 +72,12 @@
       <div class="lg:col-span-3 bg-white rounded-lg border border-slate-200 p-2 shadow-xs relative">
         <div ref="chartContainer" class="w-full h-[580px] rounded"></div>
 
-        <!-- Legend Overlay (Zero-Pill Rule) -->
+        <!-- Legend Overlay（跟随领域 schema） -->
         <div class="absolute bottom-4 left-4 bg-white/90 backdrop-blur-xs border border-slate-200/80 rounded-md p-2 text-xs shadow-xs space-y-1">
           <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">节点图例 (Node Types)</div>
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#0284c7]"></span>
-            <span class="text-slate-700">生物标志物 / Subject</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#e11d48]"></span>
-            <span class="text-slate-700">疾病 / 临床结局 (Object)</span>
+          <div v-for="cat in categories" :key="cat.key" class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full" :style="{ backgroundColor: cat.color }"></span>
+            <span class="text-slate-700">{{ cat.label }}</span>
           </div>
         </div>
       </div>
@@ -148,30 +149,30 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
 import * as echarts from 'echarts';
-import { GraphNode, GraphLink } from '../types';
+import { GraphCategory, GraphNode, GraphLink } from '../types';
 import { ElMessage } from 'element-plus';
 
 const props = defineProps<{
   nodes: GraphNode[];
   links: GraphLink[];
+  categories: GraphCategory[];
 }>();
 
 const chartContainer = ref<HTMLDivElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
 
-const visibleCategories = ref([true, true]);
+const visibleCategories = ref<boolean[]>([]);
 const minWeight = ref(0);
 const searchKeyword = ref('');
 const selectedNode = ref<GraphNode | null>(null);
 
-const categoryColors = ['#0284c7', '#e11d48'];
+// 类别集合来自 props（领域 schema 动态生成）；schema 变化时重置为全选
+watch(() => props.categories, (cats) => {
+  visibleCategories.value = cats.map(() => true);
+}, { immediate: true });
 
 function getCategoryName(category: number) {
-  switch (category) {
-    case 0: return '生物标志物 (Subject)';
-    case 1: return '疾病/临床结局 (Object)';
-    default: return '生物实体';
-  }
+  return props.categories[category]?.label ?? '生物实体';
 }
 
 const connectedEdges = computed(() => {
@@ -207,7 +208,7 @@ function updateChart() {
   if (!chartInstance) return;
 
   // Filter nodes according to category toggles
-  const activeNodes = props.nodes.filter(n => visibleCategories.value[n.category]);
+  const activeNodes = props.nodes.filter(n => visibleCategories.value[n.category] ?? true);
   const activeNodeIds = new Set(activeNodes.map(n => n.id));
 
   // Filter links
@@ -229,7 +230,7 @@ function updateChart() {
       symbolSize: isMatched ? node.symbolSize * 1.3 : node.symbolSize,
       value: node.value,
       itemStyle: {
-        color: categoryColors[node.category],
+        color: props.categories[node.category]?.color ?? '#94a3b8',
         borderColor: isMatched ? '#f59e0b' : '#ffffff',
         borderWidth: isMatched ? 3 : 1.5,
         shadowBlur: isMatched ? 12 : 3,
@@ -291,10 +292,7 @@ function updateChart() {
         layout: 'force',
         data: chartNodes,
         links: chartLinks,
-        categories: [
-          { name: '生物标志物 (Subject)' },
-          { name: '疾病/临床结局 (Object)' }
-        ],
+        categories: props.categories.map(c => ({ name: c.label })),
         roam: true,
         draggable: true,
         force: {

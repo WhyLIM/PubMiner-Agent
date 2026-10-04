@@ -384,6 +384,25 @@ def create_app(container: Container) -> FastAPI:
 
     # ------------------------------------------------------------ 跨论文验证 / 覆盖 / 审核（PR-013）
 
+    @app.get("/api/v1/domains")
+    def list_domains() -> schemas.DomainsResponse:
+        """领域 schema 清单：图谱图例/分类标签由前端按活跃领域动态生成。"""
+        from pubminer.workflows.domain_schema import discover_domains, load_domain
+
+        domains: list[schemas.DomainInfo] = []
+        for _name, path in discover_domains().items():
+            d = load_domain(path)
+            domains.append(
+                schemas.DomainInfo(
+                    name=d.name,
+                    display=d.display,
+                    default_task=d.default_task,
+                    object_label=d.object_label,
+                    entity_types=[schemas.DomainEntityType(key=k, label=v) for k, v in d.entity_types.items()],
+                )
+            )
+        return schemas.DomainsResponse(domains=domains)
+
     @app.get("/api/v1/documents")
     def list_documents(limit: int = 100) -> schemas.DocumentsResponse:
         with session_scope(container.session_factory) as session:
@@ -419,6 +438,8 @@ def create_app(container: Container) -> FastAPI:
                     entity = entity_repo.get(claim.subject_entity_id)
                     if entity is not None:
                         payload["subject_name"] = entity.canonical_name
+                        etype = getattr(entity.type, "value", entity.type)
+                        payload["subject_type"] = str(etype).upper()
                 items.append(schemas.AggregationItem(**payload))
             return schemas.AggregationsResponse(aggregations=items)
 

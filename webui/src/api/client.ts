@@ -114,6 +114,20 @@ export interface AggregationItem {
   distinct_documents: number;
   reasons: string[];
   subject_name?: string;
+  subject_type?: string;
+}
+
+export interface DomainEntityType {
+  key: string;
+  label: string;
+}
+
+export interface DomainInfo {
+  name: string;
+  display: string;
+  default_task: string;
+  object_label: string;
+  entity_types: DomainEntityType[];
 }
 
 export interface DocumentClaimEntry {
@@ -347,6 +361,9 @@ export const agentApi = {
 
   getAggregations: () =>
     request<{ aggregations: AggregationItem[] }>("/api/v1/verification/aggregations"),
+
+  listDomains: () =>
+    request<{ domains: DomainInfo[] }>("/api/v1/domains"),
 
   listDocuments: (limit = 100) =>
     request<{ documents: DocumentItem[] }>(`/api/v1/documents?limit=${limit}`),

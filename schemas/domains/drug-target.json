@@ -15,12 +15,25 @@
     "binds": "BINDS",
     "modulates": "MODULATES"
   },
-  "directions": ["AGONIST", "ANTAGONIST", "INHIBITOR", "ACTIVATOR", "UNSPECIFIED"],
-  "outcome_hints": ["IC50", "EC50", "Ki", "binding affinity", "dose response"],
+  "directions": [
+    "AGONIST",
+    "ANTAGONIST",
+    "INHIBITOR",
+    "ACTIVATOR",
+    "UNSPECIFIED"
+  ],
+  "outcome_hints": [
+    "IC50",
+    "EC50",
+    "Ki",
+    "binding affinity",
+    "dose response"
+  ],
   "signature_template": "{subject} | {predicate} | {object}",
   "verification": {
     "p_value_threshold": 0.05,
     "iv_min_documents": 2
   },
-  "screen_hints": "drug-target interaction, binding affinity, pharmacological modulation"
+  "screen_hints": "drug-target interaction, binding affinity, pharmacological modulation",
+  "object_label": "互作对象"
 }

@@ -200,6 +200,24 @@ class AggregationItem(BaseModel):
     distinct_documents: int = 0
     reasons: list[str] = Field(default_factory=list)
     subject_name: str = ""
+    subject_type: str = ""
+
+
+class DomainEntityType(BaseModel):
+    key: str
+    label: str
+
+
+class DomainInfo(BaseModel):
+    name: str
+    display: str = ""
+    default_task: str = ""
+    object_label: str = ""
+    entity_types: list[DomainEntityType] = Field(default_factory=list)
+
+
+class DomainsResponse(BaseModel):
+    domains: list[DomainInfo] = Field(default_factory=list)
 
 
 class DocumentClaimEntry(BaseModel):

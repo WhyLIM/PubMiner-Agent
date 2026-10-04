@@ -16,8 +16,25 @@
     "predictive": "PREDICTIVE",
     "therapeutic": "THERAPEUTIC"
   },
-  "directions": ["HIGH", "LOW", "OVEREXPRESSION", "UNDEREXPRESSION", "AMPLIFICATION", "DELETION", "MUTATION", "POSITIVE", "NEGATIVE", "UNSPECIFIED"],
-  "outcome_hints": ["overall survival", "disease-free survival", "progression-free survival", "recurrence-free survival", "cancer-specific survival"],
+  "directions": [
+    "HIGH",
+    "LOW",
+    "OVEREXPRESSION",
+    "UNDEREXPRESSION",
+    "AMPLIFICATION",
+    "DELETION",
+    "MUTATION",
+    "POSITIVE",
+    "NEGATIVE",
+    "UNSPECIFIED"
+  ],
+  "outcome_hints": [
+    "overall survival",
+    "disease-free survival",
+    "progression-free survival",
+    "recurrence-free survival",
+    "cancer-specific survival"
+  ],
   "signature_template": "{subject} | {predicate} | {object} | {direction}",
   "verification": {
     "p_value_threshold": 0.05,
@@ -32,5 +49,6 @@
       "PREDICTIVE": "Prediction",
       "THERAPEUTIC": "Treatment"
     }
-  }
+  },
+  "object_label": "疾病/临床结局"
 }

@@ -67,6 +67,7 @@
         v-else-if="activeTab === 'graph'"
         :nodes="currentTopic.graphNodes"
         :links="currentTopic.graphLinks"
+        :categories="graphCategories"
       />
 
       <!-- View 3: ECharts Academic Analytics Dashboard -->
@@ -88,12 +89,10 @@
         <div class="flex items-center gap-2">
           <span class="font-bold text-slate-600">PubMiner-Agent</span>
           <span>·</span>
-          <span>Vue 3 + Element Plus + ECharts 生物医药证据挖掘工作台</span>
+          <span>生物医药证据挖掘工作台</span>
         </div>
         <div class="flex items-center gap-3 font-mono text-[11px]">
           <span>Data Sources: PubMed · PMC OA</span>
-          <span>·</span>
-          <span>NCBI E-Utilities Grounded</span>
         </div>
       </div>
     </footer>
@@ -201,6 +200,7 @@ const topics = computed(() => [currentTopic.value]);
 const shortSessionId = computed(() => (research.session.value?.session_id ?? '').slice(0, 8) || '—');
 const sessionStatus = computed(() => research.session.value?.status ?? null);
 const includedCount = computed(() => research.papers.value.filter(p => p.screeningStatus === 'included').length);
+const graphCategories = computed(() => research.graphCategories.value);
 const paperCount = computed(() => research.papers.value.length);
 const docCount = computed(() => research.documents.value.length);
 const totalEvidence = computed(() => research.papers.value.reduce((s, p) => s + (p.evidenceCount ?? 0), 0));
