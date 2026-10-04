@@ -82,7 +82,12 @@
         <template v-if="stepOutput">
           <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">步骤输出摘要 (output_summary)</div>
           <div class="bg-slate-50 rounded p-3 text-xs font-mono text-slate-700 overflow-x-auto max-h-64 overflow-y-auto">
-            <pre class="whitespace-pre-wrap">{{ JSON.stringify(stepOutput, null, 2) }}</pre>
+            <pre class="whitespace-pre-wrap">{{ stepOutputDisplay }}</pre>
+          </div>
+          <div v-if="stepOutputTruncated" class="mt-1.5">
+            <el-button size="small" link type="primary" @click="showFullOutput = !showFullOutput">
+              {{ showFullOutput ? '收起，仅显示摘要' : `显示完整输出（共 ${stepOutputText.length.toLocaleString()} 字符）` }}
+            </el-button>
           </div>
         </template>
         <div v-else-if="activeStep && activeStep.status === 'SUCCEEDED'" class="text-xs text-slate-400">
@@ -149,6 +154,22 @@ const activeStep = computed(() => steps.value[activeStepIndex.value] ?? null);
 /** W1 修复：从后端 run_steps.output_summary 直接获取步骤输出 */
 const stepOutput = computed(() => activeStep.value?.output_summary ?? null);
 const displayError = computed(() => runError.value ?? error.value);
+
+// ---- 步骤输出渲染性能优化 ----
+// 大输出（如 200 条筛选决策）整段渲染会导致卡顿：序列化结果用 computed 缓存，
+// 默认只显示前 N 字符，完整输出按需渲染。
+const STEP_OUTPUT_LIMIT = 5000;
+const showFullOutput = ref(false);
+const stepOutputText = computed(() => (stepOutput.value ? JSON.stringify(stepOutput.value, null, 2) : ''));
+const stepOutputTruncated = computed(() => stepOutputText.value.length > STEP_OUTPUT_LIMIT);
+const stepOutputDisplay = computed(() => {
+  if (!stepOutputTruncated.value || showFullOutput.value) { return stepOutputText.value; }
+  return stepOutputText.value.slice(0, STEP_OUTPUT_LIMIT) + '\n…（已截断）';
+});
+// 切换步骤时回到摘要视图，避免上一手点的"完整输出"渲染新步骤的大对象
+watch(() => activeStepIndex.value, () => {
+  showFullOutput.value = false;
+});
 
 /** W3：中文步骤名（HYDRATE2 等第二轮步骤去尾号后映射） */
 function stepLabel(type: string): string {

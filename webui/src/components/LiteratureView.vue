@@ -741,11 +741,16 @@
                 <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{{ reviewLabel(ev.review_status) }}</span>
                 <span v-if="ev.section_path" class="font-mono text-slate-400">{{ ev.section_path }}</span>
               </div>
+              <!-- 原文窗口 + span 高亮（全文文献只展示 span 前后各 ~200 字符） -->
               <SpanHighlight
-                :canonical-text="ev.canonical_text || ev.span_text"
-                :start-char="ev.canonical_text ? ev.start_char : 0"
-                :end-char="ev.canonical_text ? ev.end_char : ev.span_text.length"
+                v-if="docCtx(ev)"
+                :canonical-text="docCtx(ev)!.text"
+                :start-char="docCtx(ev)!.start"
+                :end-char="docCtx(ev)!.end"
               />
+              <p v-else class="text-xs text-slate-800 leading-relaxed">
+                {{ ev.span_text }}
+              </p>
               <div class="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2 text-[10px] font-mono text-slate-400">
                 <span class="line-clamp-1" :title="ev.claim_signature">{{ shortSignature(ev.claim_signature) }}</span>
               </div>
@@ -766,7 +771,7 @@ import { ref, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import SpanHighlight from './SpanHighlight.vue';
 import AgentWorkflowView from './AgentWorkflowView.vue';
-import { agentApi, type DocumentDetail, type DocumentItem, type EvidenceSpanItem } from '@/api/client';
+import { agentApi, type DocumentDetail, type DocumentEvidenceEntry, type DocumentItem, type EvidenceSpanItem } from '@/api/client';
 import { useResearch } from '@/composables/useResearch';
 
 const {
@@ -984,6 +989,13 @@ function ctxFor(ev: EvidenceSpanItem) {
   const text = ev.canonical_text ?? '';
   if (!text || !ev.span) { return null; }
   return highlightWindow(text, ev.span.start_char, ev.span.end_char);
+}
+
+/** 文献抽屉：同上，避免 PMC 全文逐条渲染整篇论文 */
+function docCtx(ev: DocumentEvidenceEntry) {
+  const text = ev.canonical_text || '';
+  if (!text) { return null; }
+  return highlightWindow(text, ev.start_char, ev.end_char);
 }
 
 function toggleFilterExpanded() {
