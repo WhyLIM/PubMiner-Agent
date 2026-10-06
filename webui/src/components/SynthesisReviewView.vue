@@ -80,7 +80,7 @@
               <el-icon class="text-sky-600"><ChatDotRound /></el-icon>
               <h3 class="text-xs font-bold text-slate-900">证据溯源问答</h3>
             </div>
-            <span class="text-[11px] text-emerald-600 font-mono font-medium">● 本地证据检索 · 可溯源</span>
+            <span class="text-[11px] text-emerald-600 font-mono font-medium">● 混合检索 + AI 生成 · 可溯源</span>
           </div>
 
           <!-- Suggested Quick Prompts (generated from real data) -->
@@ -160,7 +160,7 @@ const props = defineProps<{
   topic: ResearchTopic;
 }>();
 
-const { aggregations, session, coverage } = useResearch();
+const { aggregations, session, coverage, sessionId } = useResearch();
 
 const activeRightTab = ref<'chat' | 'none'>('chat');
 const inputQuestion = ref('');
@@ -313,7 +313,7 @@ interface ChatMessage {
 const messages = ref<ChatMessage[]>([
   {
     sender: 'agent',
-    text: `你好！我基于当前会话的真实证据库（${aggregations.value.length} 条聚合命题）回答问题。输入关键词（如基因名、药物名、表型），我会检索相关命题并给出可溯源的原文片段。`
+    text: `你好！我基于当前会话的真实证据库（${aggregations.value.length} 条聚合命题）回答问题。我会用语义+关键词混合检索证据库，并只依据检索到的原文片段生成回答（标注引用、可溯源）。`
   }
 ]);
 
@@ -359,6 +359,14 @@ function bestSpan(evidence: EvidenceSpanItem[]): EvidenceSpanItem | null {
 }
 
 async function answerFromEvidence(q: string): Promise<{ text: string; citations: string[] }> {
+  // 优先走后端 RAG：混合检索（embedding+关键词）→ 证据片段 → LLM 生成
+  if (sessionId.value) {
+    try {
+      const res = await agentApi.askEvidence(sessionId.value, q);
+      return { text: res.answer, citations: res.citations.map(c => c.label) };
+    } catch { /* 后端不可用/未配置 embedding → 降级本地检索 */ }
+  }
+
   const aggs = aggregations.value;
   if (!aggs.length) {
     return { text: '当前会话没有聚合命题。请先在文献页运行一次挖掘管线。', citations: [] };

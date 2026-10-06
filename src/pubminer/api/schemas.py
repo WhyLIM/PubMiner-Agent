@@ -396,6 +396,25 @@ class SaveSearchIntentsRequest(BaseModel):
     search_intents: list[SearchIntentItem] = Field(min_length=1)
 
 
+class QaRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+
+
+class QaCitationItem(BaseModel):
+    label: str
+    claim_signature: str = ""
+    polarity: str = ""
+    section_path: str = ""
+    document_title: str = ""
+
+
+class QaResponse(BaseModel):
+    answer: str
+    generated_by: str = "template"
+    citations: list[QaCitationItem] = Field(default_factory=list)
+    matched_claims: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class GenerateSchemaRequest(BaseModel):
     description: str = Field(..., min_length=5, description="研究领域的自然语言描述")
 

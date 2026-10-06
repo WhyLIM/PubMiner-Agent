@@ -388,6 +388,23 @@ export const agentApi = {
   getDocument: (documentId: string) =>
     request<DocumentDetail>(`/api/v1/documents/${documentId}`),
 
+  askEvidence: (sessionId: string, question: string) =>
+    request<{
+      answer: string;
+      generated_by: string;
+      citations: Array<{
+        label: string;
+        claim_signature: string;
+        polarity: string;
+        section_path: string;
+        document_title: string;
+      }>;
+      matched_claims: Array<Record<string, unknown>>;
+    }>(`/api/v1/agent/sessions/${sessionId}/qa`, {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
+
   getCoverage: (sessionId: string) =>
     request<{
       session_id: string;

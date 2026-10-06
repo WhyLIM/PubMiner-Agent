@@ -665,6 +665,34 @@ def create_app(container: Container) -> FastAPI:
             )
             return {"ok": True, "count": len(body.search_intents)}
 
+    @app.post("/api/v1/agent/sessions/{session_id}/qa")
+    def session_qa(session_id: str, body: schemas.QaRequest) -> schemas.QaResponse:
+        """RAG 式证据问答：混合检索（embedding + 关键词）→ 证据片段 → LLM 生成。
+
+        LLM 或 embedding 不可用时降级为模板拼装，接口始终可用。
+        """
+        sid = _parse_uuid(session_id, "session")
+        if container.embedding_service is None:
+            raise HTTPException(503, "embedding service not configured (PUBMINER_EMBEDDING_MODEL)")
+        from pubminer.workflows.qa import EvidenceQA
+
+        with session_scope(container.session_factory) as session:
+            qa = EvidenceQA(
+                session=session,
+                claim_repo=container.claim_repository(session),
+                entity_repo=container.entity_repository(session),
+                embedding_service=container.embedding_service,
+                llm=container.llm,
+                prompt_registry=container.prompt_registry,
+            )
+            result = qa.answer(body.question)
+            return schemas.QaResponse(
+                answer=result.answer,
+                generated_by=result.generated_by,
+                citations=[schemas.QaCitationItem(**vars(c)) for c in result.citations],
+                matched_claims=result.matched_claims,
+            )
+
     @app.post("/api/v1/agent/sessions/{session_id}/run", status_code=202)
     def run_session(session_id: str, body: schemas.RunSessionRequest) -> schemas.RunSessionResponse:
         """一键运行：绑定约束（可选）→ 生成并批准计划 → 启动挖掘管线。"""
