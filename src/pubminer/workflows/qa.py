@@ -41,7 +41,9 @@ def keyword_score(question: str, text: str) -> float:
     return min(1.0, matched / 6.0)
 
 
-def combined_scores(question: str, texts: list[str], embedding_service: EmbeddingService | None) -> list[float]:
+def combined_scores(
+    question: str, texts: list[str], embedding_service: EmbeddingService | None, *, session=None,
+) -> list[float]:
     """混合得分 = embedding 语义相似度 + 0.5 × 关键词命中。"""
     if not texts:
         return []
@@ -49,7 +51,7 @@ def combined_scores(question: str, texts: list[str], embedding_service: Embeddin
     if embedding_service is None:
         return [0.5 * k for k in kw]
     qvec = embedding_service.build_profile(question)
-    vecs = embedding_service.embed_texts(texts)
+    vecs = embedding_service.embed_texts(texts, session=session)
     emb = [cosine_similarity(qvec, v) for v in vecs]
     return [e + 0.5 * k for e, k in zip(emb, kw)]
 
@@ -131,7 +133,10 @@ class EvidenceQA:
                 "text": self._claim_text(agg, claim, subject_name),
             })
 
-        scores = combined_scores(question, [e["text"] for e in entries], self.embedding_service)
+        scores = combined_scores(
+            question, [e["text"] for e in entries], self.embedding_service,
+            session=self.session,
+        )
         for entry, score in zip(entries, scores):
             entry["score"] = score
         entries.sort(key=lambda e: -e["score"])

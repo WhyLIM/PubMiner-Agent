@@ -58,20 +58,38 @@ class PubexHydrateAdapter:
         self.loop = loop
         self.include_fulltext = include_fulltext
 
+    PMC_FETCH_WORKERS = 6  # PMC OA 无 key 限流宽松；元数据仍走批量 efetch
+
     def hydrate_many(self, pmids: list[str]) -> list[HydratedDocument | None]:
-        """批量水合：一次 efetch 取全部元数据，逐篇尝试 PMC 全文。"""
+        """批量水合：一次 efetch 取全部元数据，PMC 全文抓取有限并发。
+
+        LoopRunner 通过 run_coroutine_threadsafe 提交到专用事件循环，
+        多线程调用安全；单篇失败（含 PMC 瞬断）返回 None 不阻断。
+        """
         if not pmids:
             return []
         records = self.loop.run(self.metadata_client.fetch_batch(pmids, batch_size=max(len(pmids), 1)))
         by_pmid = {r.pmid: r for r in records}
-        results: list[HydratedDocument | None] = []
-        for pmid in pmids:
-            record = by_pmid.get(pmid)
-            if record is None:
-                results.append(None)
-                continue
-            results.append(self._build_hydrated(record, pmid))
+        results: list[HydratedDocument | None] = [None] * len(pmids)
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=self.PMC_FETCH_WORKERS) as pool:
+            futures = {
+                idx: pool.submit(self._hydrate_one_safe, by_pmid.get(pmid), pmid)
+                for idx, pmid in enumerate(pmids)
+            }
+            for idx, future in futures.items():
+                results[idx] = future.result()
         return results
+
+    def _hydrate_one_safe(self, record, pmid: str) -> HydratedDocument | None:
+        if record is None:
+            return None
+        try:
+            return self._build_hydrated(record, pmid)
+        except Exception as exc:
+            logger.warning("hydrate failed for %s: %s", pmid, exc)
+            return None
 
     def hydrate(self, pmid: str) -> HydratedDocument | None:
         records = self.loop.run(self.metadata_client.fetch_batch([pmid], batch_size=1))

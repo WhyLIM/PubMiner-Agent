@@ -47,6 +47,16 @@ const coverage = ref<{
   independent_validation_found: boolean;
   unresolved_gaps: string[];
   recommended_next_action?: string | null;
+  questions?: Array<{
+    question: string;
+    support_count: number;
+    contradict_count: number;
+    no_effect_count: number;
+    uncertain_count: number;
+    independent_validation_found: boolean;
+    covered: boolean;
+    note: string;
+  }>;
 } | null>(null);
 
 // ---- 运行期轮询状态（跨视图共享，AgentWorkflowView 直接消费） ----

@@ -23,6 +23,15 @@ class ResultCacheRepository:
             return None
         return dict(row.value or {})
 
+    def get_many(self, kind: str, cache_keys: list[str]) -> dict[str, dict[str, Any]]:
+        """批量读取（用于 embedding 向量缓存）。"""
+        out: dict[str, dict[str, Any]] = {}
+        for key in cache_keys:
+            row = self.session.get(LLMCacheRow, (key, kind))
+            if row is not None:
+                out[key] = dict(row.value or {})
+        return out
+
     def put(self, kind: str, cache_key: str, value: dict[str, Any], *, prompt_version: str = "") -> None:
         existing = self.session.get(LLMCacheRow, (cache_key, kind))
         if existing is not None:

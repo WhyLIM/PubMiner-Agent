@@ -281,6 +281,7 @@ class CoverageQuestionItem(BaseModel):
     uncertain_count: int = 0
     independent_validation_found: bool = False
     covered: bool = False
+    note: str = ""
 
 
 class CoverageResponse(BaseModel):

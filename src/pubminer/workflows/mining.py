@@ -214,16 +214,26 @@ class MiningWorkflow:
         hydrated: list[dict] = list(state.get("hydrated", []))
         failed_hydrations: list[str] = []
         known = {h["pmid"] for h in hydrated}
-        for pmid in state.get("pmids", []):
-            if pmid in known:
-                continue
+        todo = [p for p in state.get("pmids", []) if p not in known]
+        # 批量优先（元数据一次 efetch + PMC 全文有限并发）；fake 端口回退逐篇
+        hydrate_many = getattr(self.ports.hydrate, "hydrate_many", None)
+        results: list[HydratedDocument | None]
+        if hydrate_many is not None and todo:
             try:
-                doc = self.ports.hydrate.hydrate(pmid)
+                results = hydrate_many(todo)
             except Exception as exc:
-                logger.warning("hydrate failed for %s (skipped): %s", pmid, exc)
-                failed_hydrations.append(pmid)
-                continue
+                raise WorkflowStepError(f"hydrate failed: {exc}") from exc
+        else:
+            results = []
+            for pmid in todo:
+                try:
+                    results.append(self.ports.hydrate.hydrate(pmid))
+                except Exception as exc:
+                    logger.warning("hydrate failed for %s (skipped): %s", pmid, exc)
+                    results.append(None)
+        for pmid, doc in zip(todo, results):
             if doc is None:
+                failed_hydrations.append(pmid)
                 continue
             stored = doc_repo.upsert_document(doc.document)
             version_id = doc_repo.get_or_add_version(stored.id, doc.version, doc.section_spans)
@@ -271,15 +281,18 @@ class MiningWorkflow:
                 for item in [item]
             ]
             texts = [c["abstract"] for c in candidates]
+            scores = embedding_service.similarity_to_profile(
+                profile, texts, session=self.task_repo.session
+            )
+            threshold = embedding_service.adaptive_threshold(scores)
             passed_ids = {
-                c["doc_id"] for c, score in zip(
-                    candidates, embedding_service.similarity_to_profile(profile, texts)
-                ) if score >= embedding_service.threshold
+                c["doc_id"] for c, score in zip(candidates, scores) if score >= threshold
             }
             pre_filter_count = len(to_screen)
             to_screen = [item for item in to_screen if str(item["document"]["id"]) in passed_ids]
             logger.info(
-                "embedding prefilter: %d/%d passed", len(to_screen), pre_filter_count
+                "embedding prefilter: %d/%d passed (threshold=%.2f)",
+                len(to_screen), pre_filter_count, threshold,
             )
 
         # 第二级：LLM 筛选 + 全文级联升级

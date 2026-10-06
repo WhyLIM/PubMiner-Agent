@@ -51,37 +51,88 @@ class EmbeddingService:
         self._cache: dict[str, list[float]] = {}
         self._cache_max = cache_max
 
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """批量计算 embedding，命中缓存的跳过。"""
+    def embed_texts(self, texts: list[str], *, session=None) -> list[list[float]]:
+        """批量计算 embedding：内存缓存 → DB 持久缓存（llm_cache, kind=embed）→ 计算。
+
+        session 由调用方传入当前事务（与其它缓存同模式，避免 SQLite 锁冲突）；
+        未传 session 时仅用内存缓存。
+        """
         uncached: dict[int, str] = {}
         vectors: list[list[float] | None] = [None] * len(texts)
+        keys = [_cache_key(t) for t in texts]
 
-        for i, text in enumerate(texts):
-            key = _cache_key(text)
+        for i, key in enumerate(keys):
             if key in self._cache:
                 vectors[i] = self._cache[key]
             else:
                 uncached[i] = key
 
+        if uncached and session is not None:
+            from pubminer.infrastructure.db.repositories.llm_cache import ResultCacheRepository
+
+            stored = ResultCacheRepository(session).get_many("embed", list(uncached.values()))
+            for i in sorted(uncached):
+                hit = stored.get(uncached[i])
+                if hit and hit.get("vector"):
+                    vec = hit["vector"]
+                    vectors[i] = vec
+                    if len(self._cache) < self._cache_max:
+                        self._cache[uncached[i]] = vec
+                    uncached.pop(i)
+
         if uncached:
             batch_texts = [texts[i] for i in sorted(uncached)]
             batch_vectors = self._embed_fn(batch_texts)
+            if session is not None:
+                from pubminer.infrastructure.db.repositories.llm_cache import ResultCacheRepository
+
+                repo = ResultCacheRepository(session)
+            else:
+                repo = None
             for j, idx in enumerate(sorted(uncached)):
                 vec = batch_vectors[j]
                 vectors[idx] = vec
                 if len(self._cache) < self._cache_max:
                     self._cache[uncached[idx]] = vec
+                if repo is not None:
+                    repo.put("embed", uncached[idx], {"vector": vec}, prompt_version="embedding")
 
         return [v for v in vectors if v is not None]
 
-    def similarity_to_profile(self, profile_vector: list[float], texts: list[str]) -> list[float]:
+    def similarity_to_profile(self, profile_vector: list[float], texts: list[str], *, session=None) -> list[float]:
         """计算一批文本与研究目标 profile 的余弦相似度。"""
-        vectors = self.embed_texts(texts)
+        vectors = self.embed_texts(texts, session=session)
         return [cosine_similarity(profile_vector, v) for v in vectors]
 
     def build_profile(self, goal_text: str) -> list[float]:
         """从研究目标生成 profile 向量。"""
         return self._embed_fn([goal_text])[0]
+
+    @staticmethod
+    def adaptive_threshold(
+        scores: list[float],
+        *,
+        base: float = 0.35,
+        floor: float = 0.20,
+        ceil: float = 0.45,
+        drop_fraction: float = 0.35,
+        min_docs: int = 50,
+    ) -> float:
+        """按当轮分数分布动态选阈值（Item 8）。
+
+        淘汰最低 drop_fraction 比例的候选，但阈值夹在 [floor, ceil]，
+        样本不足 min_docs 时退回固定 base。保守设计不变：
+        宁可放过不可错杀，LLM 精筛才是判定层。
+        """
+        import statistics
+
+        if len(scores) < min_docs:
+            return base
+        try:
+            q = statistics.quantiles(sorted(scores), n=100)[max(0, int(drop_fraction * 100) - 1)]
+        except Exception:
+            return base
+        return max(floor, min(ceil, q))
 
     def prefilter(
         self,

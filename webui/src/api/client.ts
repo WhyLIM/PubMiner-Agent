@@ -412,7 +412,16 @@ export const agentApi = {
   getCoverage: (sessionId: string) =>
     request<{
       session_id: string;
-      questions: Array<{ question: string; support_count: number; contradict_count: number }>;
+      questions: Array<{
+        question: string;
+        support_count: number;
+        contradict_count: number;
+        no_effect_count: number;
+        uncertain_count: number;
+        independent_validation_found: boolean;
+        covered: boolean;
+        note: string;
+      }>;
       support_count: number;
       contradict_count: number;
       no_effect_count: number;

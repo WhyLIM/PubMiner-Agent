@@ -142,32 +142,90 @@ class CrossPaperVerifier:
         return agg
 
     def coverage_snapshot(self, session: Session, session_id: UUID, turn: int = 0) -> CoverageSnapshot:
-        """关键问题覆盖矩阵（MVP：把聚合结果映射为单一研究问题）。"""
-        aggregations = self.aggregate(session)
-        item = CoverageItem(
-            question=session_spec_question(session_id),
-            support_count=sum(a.support_count for a in aggregations),
-            contradict_count=sum(a.contradict_count for a in aggregations),
-            no_effect_count=sum(a.no_effect_count for a in aggregations),
-            uncertain_count=sum(a.uncertain_count for a in aggregations),
-            independent_validation_found=any(a.independent_validation for a in aggregations),
-        )
-        item.covered = item.support_count > 0 and item.independent_validation_found
+        """关键问题覆盖矩阵：由会话 TaskSpec 生成多行问题（疾病/任务/验证/冲突/不确定）。"""
+        aggregations = self.aggregate(session, limit=1000)
+        spec = _session_task_spec(session, session_id)
+        questions = self._coverage_questions(aggregations, spec)
         gaps: list[str] = []
         for agg in aggregations:
             gaps.extend(agg.reasons)
+        primary = questions[0]
         return CoverageSnapshot(
             session_id=session_id,
             turn=turn,
-            questions=[item],
-            support_count=item.support_count,
-            contradict_count=item.contradict_count,
-            no_effect_count=item.no_effect_count,
-            independent_validation_found=item.independent_validation_found,
+            questions=questions,
+            support_count=primary.support_count,
+            contradict_count=primary.contradict_count,
+            no_effect_count=primary.no_effect_count,
+            independent_validation_found=primary.independent_validation_found,
             unresolved_gaps=gaps,
-            recommended_next_action=None if item.covered else "EXPAND_QUERY",
+            recommended_next_action=None if primary.covered else "EXPAND_QUERY",
         )
 
+    def _coverage_questions(self, aggregations, spec: dict | None) -> list[CoverageItem]:
+        disease = (spec or {}).get("disease") or "目标疾病"
+        task = (spec or {}).get("task") or "prognostic_biomarker"
+        task_label = {"prognostic_biomarker": "预后", "diagnostic_biomarker": "诊断",
+                      "predictive_biomarker": "疗效预测"}.get(str(task), "相关结局")
 
-def session_spec_question(session_id: UUID) -> str:
-    return "核心问题：目标疾病下 biomarker 的预后作用及其独立验证"
+        def counts(items):
+            return (
+                sum(a.support_count for a in items),
+                sum(a.contradict_count for a in items),
+                sum(a.no_effect_count for a in items),
+                sum(a.uncertain_count for a in items),
+            )
+
+        validated = [a for a in aggregations if a.independent_validation]
+        conflicted = [a for a in aggregations if a.has_conflict]
+        uncertain = [a for a in aggregations if a.uncertain_count > 0]
+
+        s, c, n, u = counts(aggregations)
+        primary = CoverageItem(
+            question=f"{disease} 中标志物的{task_label}证据是否已检索并聚合",
+            support_count=s, contradict_count=c, no_effect_count=n, uncertain_count=u,
+            independent_validation_found=bool(validated),
+        )
+        primary.covered = primary.support_count > 0 and primary.independent_validation_found
+        primary.note = f"共 {len(aggregations)} 条聚合命题"
+
+        s, c, n, u = counts(validated)
+        q2 = CoverageItem(
+            question="是否存在独立队列验证（≥3 篇同向）",
+            support_count=s, contradict_count=c, no_effect_count=n, uncertain_count=u,
+            independent_validation_found=bool(validated),
+        )
+        q2.covered = bool(validated)
+        q2.note = f"{len(validated)} 条命题达标"
+
+        s, c, n, u = counts(conflicted)
+        q3 = CoverageItem(
+            question="冲突证据是否已识别并送人工复核",
+            support_count=s, contradict_count=c, no_effect_count=n, uncertain_count=u,
+            independent_validation_found=False,
+        )
+        q3.covered = all(a.needs_review for a in conflicted) if conflicted else True
+        q3.note = f"{len(conflicted)} 条冲突命题" if conflicted else "未发现冲突"
+
+        s, c, n, u = counts(uncertain)
+        q4 = CoverageItem(
+            question="不确定证据是否已进入人工复核队列",
+            support_count=s, contradict_count=c, no_effect_count=n, uncertain_count=u,
+            independent_validation_found=False,
+        )
+        q4.covered = all(a.needs_review for a in uncertain) if uncertain else True
+        q4.note = f"{len(uncertain)} 条含不确定证据"
+
+        return [primary, q2, q3, q4]
+
+
+def _session_task_spec(session: Session, session_id: UUID) -> dict | None:
+    """读取会话 TaskSpec（AskHuman 解析结果），无则返回 None。"""
+    from sqlalchemy import select
+
+    from pubminer.infrastructure.db.orm_agents import AgentSessionRow
+
+    row = session.execute(
+        select(AgentSessionRow).where(AgentSessionRow.id == session_id)
+    ).scalars().first()
+    return row.task_spec if row is not None else None

@@ -210,7 +210,9 @@ const report = computed(() => {
   if (coverage.value) {
     lines.push(`## ${sectionNo}、覆盖度评估 (COVERAGE)`);
     lines.push('');
-    lines.push(`- 检索覆盖：支持 ${coverage.value.support_count} · 反驳 ${coverage.value.contradict_count}；独立验证${coverage.value.independent_validation_found ? '已达成' : '尚未达成'}。`);
+    for (const q of coverage.value.questions ?? []) {
+      lines.push(`- ${q.covered ? '✅' : '⚠️'} ${q.question}${q.note ? `（${q.note}）` : ''} —— 支持 ${q.support_count} · 反驳 ${q.contradict_count} · 不确定 ${q.uncertain_count}`);
+    }
     if (coverage.value.unresolved_gaps.length) {
       lines.push('- 未解决缺口：');
       for (const gap of coverage.value.unresolved_gaps) {
