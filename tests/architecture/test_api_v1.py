@@ -81,7 +81,7 @@ def _fake_ports():
             return ScreeningDecision(document_id=document.id, label=ScreeningLabel.RELEVANT)
 
     class E:
-        def extract(self, doc):
+        def extract(self, doc, *, session=None):
             from uuid import uuid4 as _u
 
             from pubminer.domain.documents import EvidenceSpan
@@ -94,13 +94,13 @@ def _fake_ports():
             )], {"n": 36}
 
     class N:
-        def resolve(self, mention, entity_type):
+        def resolve(self, mention, entity_type, *, session=None):
             from pubminer.workflows.ports import ResolutionCandidate
 
             return [ResolutionCandidate(entity_id="t", name="KRAS", identifier="NCBIGene:3845", score=0.9)], False
 
     class V:
-        def verify(self, signature, evidence):
+        def verify(self, signature, evidence, *, session=None):
             from pubminer.domain.evidence import EvidencePolarity, VerificationResult
 
             return VerificationResult(polarity=EvidencePolarity.SUPPORT, reasons=["ok"])

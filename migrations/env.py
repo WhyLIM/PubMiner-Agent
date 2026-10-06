@@ -14,7 +14,7 @@ from sqlalchemy import engine_from_config, pool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pubminer.infrastructure.db.base import Base  # noqa: E402
-from pubminer.infrastructure.db import orm_documents, orm_entities, orm_claims  # noqa: E402,F401
+from pubminer.infrastructure.db import orm_documents, orm_entities, orm_claims, orm_llm_cache  # noqa: E402,F401
 
 config = context.config
 

@@ -61,7 +61,7 @@ def build_fake_ports():
             )
 
     class Extract:
-        def extract(self, doc):
+        def extract(self, doc, *, session=None):
             version = doc.version
             canonical = version["canonical_text"] if isinstance(version, dict) else version.canonical_text
             version_id = version["id"] if isinstance(version, dict) else version.id
@@ -75,14 +75,14 @@ def build_fake_ports():
             )]
 
     class Normalize:
-        def resolve(self, mention, entity_type):
+        def resolve(self, mention, entity_type, *, session=None):
             from pubminer.workflows.ports import ResolutionCandidate
             return [ResolutionCandidate(
                 entity_id="tmp", name="KRAS", identifier="NCBIGene:3845", score=0.98,
             )], False
 
     class Verify:
-        def verify(self, signature, evidence):
+        def verify(self, signature, evidence, *, session=None):
             return VerificationResult(
                 polarity=EvidencePolarity.SUPPORT,
                 entity_correct=True, disease_correct=True, endpoint_correct=True,

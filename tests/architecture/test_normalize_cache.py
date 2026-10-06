@@ -40,7 +40,7 @@ class CountingResolver:
     def __init__(self):
         self.calls = 0
 
-    def resolve(self, mention, entity_type):
+    def resolve(self, mention, entity_type, *, session=None):
         self.calls += 1
         return [ResolutionCandidate(
             entity_id="t", name="KRAS", identifier="NCBIGene:3845", score=1.0,

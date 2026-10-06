@@ -20,7 +20,7 @@ def _ensure_schema(session_factory) -> None:
     from sqlalchemy import inspect
 
     from pubminer.infrastructure.db.base import Base
-    from pubminer.infrastructure.db import orm_claims, orm_agents, orm_documents, orm_entities, orm_tasks  # noqa: F401
+    from pubminer.infrastructure.db import orm_claims, orm_agents, orm_documents, orm_entities, orm_tasks, orm_llm_cache  # noqa: F401
 
     engine = session_factory.kw["bind"]
     if not inspect(engine).has_table("documents"):

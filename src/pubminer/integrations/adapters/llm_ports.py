@@ -81,7 +81,7 @@ class LlmExtractPort:
         self.prompts = prompt_registry
         self.extra_fields_spec = extra_fields_spec
 
-    def extract(self, hydrated: HydratedDocument) -> tuple[list[BiomarkerEvidence], dict | None]:
+    def extract(self, hydrated: HydratedDocument, *, session=None) -> tuple[list[BiomarkerEvidence], dict | None]:
         version = hydrated.version
         canonical = (
             version.get("canonical_text", "")
@@ -306,7 +306,7 @@ class LlmVerifyPort:
         self.llm = llm
         self.prompts = prompt_registry
 
-    def verify(self, claim_signature: str, evidence) -> VerificationResult:
+    def verify(self, claim_signature: str, evidence, *, session=None) -> VerificationResult:
         from pubminer.workflows.verification_rules import rule_assess
 
         prompt = self.prompts.get("verification", "v1")

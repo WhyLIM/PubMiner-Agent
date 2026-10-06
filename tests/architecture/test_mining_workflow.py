@@ -106,7 +106,7 @@ def _fake_ports(fail_search_times: int = 0):
             )
 
     class FakeExtract:
-        def extract(self, doc):
+        def extract(self, doc, *, session=None):
             # span 从水合结果（已落库的 version id）派生，保证 FK 有效
             version_id = doc.version["id"] if isinstance(doc.version, dict) else doc.version.id
             span = EvidenceSpan.from_text(version_id, uuid4(), SPAN_TEXT, 0, "RESULTS")
@@ -126,7 +126,7 @@ def _fake_ports(fail_search_times: int = 0):
             ], {"n": 412}
 
     class FakeNormalize:
-        def resolve(self, mention, entity_type):
+        def resolve(self, mention, entity_type, *, session=None):
             return (
                 [
                     ResolutionCandidate(
@@ -137,7 +137,7 @@ def _fake_ports(fail_search_times: int = 0):
             )
 
     class FakeVerify:
-        def verify(self, signature, evidence):
+        def verify(self, signature, evidence, *, session=None):
             return VerificationResult(
                 polarity=EvidencePolarity.SUPPORT,
                 entity_correct=True,

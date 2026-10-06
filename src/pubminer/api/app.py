@@ -468,15 +468,22 @@ def create_app(container: Container) -> FastAPI:
 
         with session_scope(container.session_factory) as session:
             claim_repo = container.claim_repository(session)
-            from pubminer.workflows.verification import CrossPaperVerifier
+            from pubminer.workflows.verification import CrossPaperVerifier, claim_cluster_key
 
             verifier = CrossPaperVerifier(claim_repo)
+            # 簇成员清单：整组批量复核用（同簇 claim 的 id/version/签名）
+            members_map: dict[tuple, list[dict]] = {}
+            for c in claim_repo.list_claims(limit=1000):
+                members_map.setdefault(claim_cluster_key(c), []).append(
+                    {"claim_id": str(c.id), "version": c.version, "signature": c.canonical_signature}
+                )
             items: list[schemas.ReviewQueueItem] = []
-            for agg in verifier.aggregate(session):
+            for agg in verifier.aggregate(session, limit=1000):
                 if agg.status not in ("CANDIDATE", "REVIEWED"):
                     continue
                 claim = claim_repo.get(agg.claim_id)
                 assert claim is not None
+                key = claim_cluster_key(claim)
                 evidences = claim_repo.get_evidence(agg.claim_id)
                 polarities = Counter(e.polarity.value for e in evidences)
                 priority = "conflict" if agg.has_conflict else (
@@ -492,6 +499,9 @@ def create_app(container: Container) -> FastAPI:
                         reasons=agg.reasons,
                         evidence_count=len(evidences),
                         polarities=dict(polarities),
+                        cluster_key="|".join(key),
+                        member_count=agg.member_count,
+                        members=members_map.get(key, []),
                     )
                 )
             # 冲突 > 需复核 > 普通

@@ -84,12 +84,12 @@ class _Screen:
 
 
 class _Extract:
-    def extract(self, doc):
+    def extract(self, doc, *, session=None):
         return _extract_from(doc)
 
 
 class _Normalize:
-    def resolve(self, mention, entity_type):
+    def resolve(self, mention, entity_type, *, session=None):
         return [ResolutionCandidate(entity_id="t", name="KRAS", identifier="NCBIGene:3845", score=1.0)], False
 
 
@@ -97,7 +97,7 @@ class _Verify:
     def __init__(self, mark_iv_from_round2=False):
         self.mark_iv_from_round2 = mark_iv_from_round2
 
-    def verify(self, signature, evidence):
+    def verify(self, signature, evidence, *, session=None):
         # 第二轮（验证队列文献，span 文本为 SPAN_2）报告独立验证
         round2 = evidence.evidence_span.text == SPAN_2
         return VerificationResult(
@@ -179,7 +179,7 @@ class TestCitationExpansion:
         citations = _Citations({"111": ["99999999"]})
 
         class _VerifyAlwaysIV:
-            def verify(self, signature, evidence):
+            def verify(self, signature, evidence, *, session=None):
                 return VerificationResult(polarity=EvidencePolarity.SUPPORT, independent_validation=True)
 
         ports = SimpleNamespace(

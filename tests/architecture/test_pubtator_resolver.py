@@ -85,7 +85,7 @@ class TestCompositeResolver:
     @staticmethod
     def _fake_resolver(candidates, needs_review):
         class _R:
-            def resolve(self, mention, entity_type):
+            def resolve(self, mention, entity_type, *, session=None):
                 return candidates, needs_review
         return _R()
 

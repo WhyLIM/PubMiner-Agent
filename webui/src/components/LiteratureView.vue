@@ -274,6 +274,11 @@
                 <span aria-hidden="true" class="text-slate-300">·</span>
                 <span class="text-sky-700 font-medium">{{ statusLabel(paper.studyType) }}</span>
                 <span
+                  v-if="(paper.memberCount ?? 1) > 1"
+                  class="px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200/60 font-medium"
+                  title="同标志物的多条同义命题已合并，可整组复核"
+                >合并 {{ paper.memberCount }} 条</span>
+                <span
                   v-if="paper.independentValidation"
                   class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-medium"
                 >独立验证</span>
@@ -285,6 +290,24 @@
 
               <!-- Quick Screening Actions -->
               <div class="flex items-center gap-1.5 shrink-0">
+                <el-dropdown
+                  v-if="paper.screeningStatus === 'flagged' && groupMembers(paper.id).length > 1"
+                  @command="(cmd: string) => groupReview(paper, cmd === 'included' ? 'included' : 'excluded')"
+                >
+                  <button
+                    class="px-2 py-1 text-xs font-medium rounded bg-violet-50 text-violet-700 hover:bg-violet-100 flex items-center gap-1"
+                    title="对簇内全部同义命题执行同一判定"
+                  >
+                    <span>整组 ×{{ groupMembers(paper.id).length }}</span>
+                    <el-icon :size="10"><ArrowDown /></el-icon>
+                  </button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="included">整组批准</el-dropdown-item>
+                      <el-dropdown-item command="excluded">整组否决</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
                 <button
                   @click="updatePaperStatus(paper, 'included')"
                   :class="[
@@ -872,6 +895,7 @@ const {
   submitReviewDecision,
   workflowPanelOpen, taskStatus, taskSteps,
   setup, startGoalSetup, sendClarification, confirmAndRun, closeSetup,
+  reviewQueue,
 } = useResearch();
 
 const searchQuery = ref('');
@@ -1221,6 +1245,33 @@ async function updatePaperStatus(paper: PaperRow, status: 'included' | 'flagged'
     await submitReviewForStatus(paper, status);
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : String(err));
+  }
+}
+
+// ---- 同义命题簇整组复核 ----
+function groupMembers(claimId: string): Array<{ claim_id: string; version: number; signature: string }> {
+  const item = reviewQueue.value.find(i => i.claim_id === claimId);
+  return item?.members ?? [];
+}
+
+async function groupReview(paper: PaperRow, status: 'included' | 'excluded') {
+  const members = groupMembers(paper.id);
+  if (members.length <= 1) { return; }
+  const decision = status === 'included' ? 'ACCEPT' as const : 'REJECT' as const;
+  let ok = 0;
+  let fail = 0;
+  for (const m of members) {
+    try {
+      await submitReviewDecision(m.claim_id, decision, `Group review: ${status}`, m.version);
+      ok += 1;
+    } catch {
+      fail += 1; // 单个成员失败（如已被终审）不阻断整组
+    }
+  }
+  if (fail) {
+    ElMessage.warning(`整组操作完成：成功 ${ok} 条，失败 ${fail} 条（可能已被终审）`);
+  } else {
+    ElMessage.success(`整组操作完成：${ok} 条命题已${status === 'included' ? '批准' : '否决'}`);
   }
 }
 

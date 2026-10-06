@@ -41,6 +41,8 @@ export interface Paper {
   evidenceCount?: number;
   /** 复核乐观锁所需的真实 claim 版本号 */
   claimVersion?: number;
+  /** 聚合簇成员数（>1 表示由多条同义命题合并） */
+  memberCount?: number;
 }
 
 export interface GraphCategory {

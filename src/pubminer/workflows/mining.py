@@ -322,7 +322,7 @@ class MiningWorkflow:
                 fulltext_available=item["fulltext_available"],
             )
             try:
-                _result = self.ports.extract.extract(hydrated)
+                _result = self.ports.extract.extract(hydrated, session=self.task_repo.session)
                 if isinstance(_result, tuple):
                     evidence_items, study_ctx = _result
                 else:
@@ -354,7 +354,7 @@ class MiningWorkflow:
             entity_type = self.domain.entity_types.get(mention_type, "OTHER")
             if mention not in cache:
                 try:
-                    candidates, needs_review = self.ports.normalize.resolve(mention, entity_type)
+                    candidates, needs_review = self.ports.normalize.resolve(mention, entity_type, session=self.task_repo.session)
                 except Exception as exc:
                     raise WorkflowStepError(f"normalize failed for {mention}: {exc}") from exc
                 cache[mention] = {
@@ -375,7 +375,7 @@ class MiningWorkflow:
             evidence = _extraction_model(extraction)
             signature = _provisional_signature(evidence, state, domain=self.domain)
             try:
-                result = self.ports.verify.verify(signature, evidence)
+                result = self.ports.verify.verify(signature, evidence, session=self.task_repo.session)
             except Exception as exc:
                 raise WorkflowStepError(f"verify failed: {exc}") from exc
             verified.append(
@@ -479,7 +479,7 @@ class MiningWorkflow:
                 fulltext_available=item["fulltext_available"],
             )
             try:
-                _result = self.ports.extract.extract(hydrated)
+                _result = self.ports.extract.extract(hydrated, session=self.task_repo.session)
                 if isinstance(_result, tuple):
                     evidence_items, study_context = _result
                 else:
@@ -533,7 +533,7 @@ class MiningWorkflow:
             evidence = _extraction_model(extraction)
             signature = _provisional_signature(evidence, state, domain=self.domain)
             try:
-                result = self.ports.verify.verify(signature, evidence)
+                result = self.ports.verify.verify(signature, evidence, session=self.task_repo.session)
             except Exception as exc:
                 raise WorkflowStepError(f"verify failed: {exc}") from exc
             verified.append({
@@ -593,6 +593,11 @@ class MiningWorkflow:
                     direction=claim.direction,
                     context=claim.context,
                 )
+                # 疾病侧实体化：MeSH 解析结果落 Entity(type=DISEASE)，object_entity_id 可用于聚簇/图谱/导出
+                disease_entity, _dr = self._ensure_disease_entity(
+                    entity_repo, disease_mesh, evidence_model.disease_mention or "UNSPECIFIED"
+                )
+                claim.object_entity_id = disease_entity.id
             evidence_rows = []
             for extraction, resolution in members:
                 ev = _extraction_model(extraction)
@@ -725,6 +730,34 @@ class MiningWorkflow:
                 ],
             )
         ), resolution.get("needs_review", False)
+
+    def _ensure_disease_entity(
+        self, entity_repo: EntityRepository, mesh_id: str, mention: str
+    ) -> tuple[Entity, bool]:
+        """按 MeSH 标识符查找或创建疾病实体（type=DISEASE）。"""
+        namespace, value = "MESH", mesh_id
+        ontology_version = "mvp-2026"
+        existing = entity_repo.find_by_identifier(namespace, value, ontology_version)
+        if existing is not None:
+            return existing, False
+        return entity_repo.create_entity(
+            Entity(
+                type=EntityType.DISEASE,
+                canonical_name=mention,
+                ontology_version=ontology_version,
+                aliases=[EntityAlias(alias=mention)],
+                identifiers=[
+                    EntityIdentifier(
+                        entity_id=uuid4(),
+                        namespace=namespace,
+                        value=value,
+                        ontology_version=ontology_version,
+                        source=_source_for_namespace(namespace),
+                        score=None,
+                    )
+                ],
+            )
+        ), False
 
     def _build_claim(
         self, signature: str, subject_entity: Entity, evidence, state: dict

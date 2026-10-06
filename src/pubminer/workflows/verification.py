@@ -32,6 +32,7 @@ class ClaimAggregation:
     distinct_documents: int = 0
     reasons: list[str] = field(default_factory=list)
     subject_name: str = ""
+    member_count: int = 1
 
     def to_dict(self) -> dict:
         return {
@@ -48,7 +49,26 @@ class ClaimAggregation:
             "distinct_documents": self.distinct_documents,
             "reasons": self.reasons,
             "subject_name": self.subject_name,
+            "member_count": self.member_count,
         }
+
+
+def claim_cluster_key(claim: Claim) -> tuple:
+    """聚簇键：subject 实体（未解析退回签名首段）+ predicate + object 归一化。
+
+    direction 不参与——HIGH/LOW 是语义不同的结论。
+    """
+    subject = (
+        f"ent:{claim.subject_entity_id}"
+        if claim.subject_entity_id
+        else f"sig:{(claim.canonical_signature.split(' | ')[0] or '').lower()}"
+    )
+    obj = (
+        f"ent:{claim.object_entity_id}"
+        if claim.object_entity_id
+        else f"val:{(claim.object_value or '').strip().upper()}"
+    )
+    return (subject, claim.predicate.value if hasattr(claim.predicate, 'value') else str(claim.predicate), obj)
 
 
 class CrossPaperVerifier:
@@ -57,15 +77,38 @@ class CrossPaperVerifier:
     def __init__(self, claim_repo: ClaimRepository) -> None:
         self.claim_repo = claim_repo
 
-    def aggregate(self, session: Session, limit: int = 200) -> list[ClaimAggregation]:
+    def aggregate(self, session: Session, limit: int = 200, *, cluster: bool = True) -> list[ClaimAggregation]:
         claims = self.claim_repo.list_claims(limit=limit)
-        result = [
-            self.aggregate_one(claim, self.claim_repo.get_evidence(claim.id))
-            for claim in claims
-        ]
+        if not cluster:
+            result = [
+                self.aggregate_one(claim, self.claim_repo.get_evidence(claim.id))
+                for claim in claims
+            ]
+        else:
+            groups: dict[tuple, list[Claim]] = {}
+            for claim in claims:
+                groups.setdefault(claim_cluster_key(claim), []).append(claim)
+            result = [self.aggregate_group(members) for members in groups.values()]
         # 冲突优先，其后按证据数排序
         result.sort(key=lambda a: (not a.has_conflict, -len(a.reasons)))
         return result
+
+    def aggregate_group(self, members: list[Claim]) -> ClaimAggregation:
+        """聚合同一簇（同 subject 实体 + predicate + object 归一化）的命题。
+
+        代表 claim 优先取 subject 已解析的（签名含真实本体编号）；
+        证据计数合并，独立验证/冲突/需复核按簇内任一成立。
+        """
+        evidences: list[Evidence] = []
+        for claim in members:
+            evidences.extend(self.claim_repo.get_evidence(claim.id))
+        representative = next((c for c in members if c.subject_entity_id), members[0])
+        agg = self.aggregate_one(representative, evidences)
+        agg.member_count = len(members)
+        if len(members) > 1:
+            agg.reasons = list(dict.fromkeys(agg.reasons))
+            agg.reasons.insert(0, f"由 {len(members)} 条同义命题合并")
+        return agg
 
     def aggregate_one(self, claim: Claim, evidences: list[Evidence]) -> ClaimAggregation:
         agg = ClaimAggregation(

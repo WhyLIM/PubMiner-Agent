@@ -201,6 +201,7 @@ class AggregationItem(BaseModel):
     reasons: list[str] = Field(default_factory=list)
     subject_name: str = ""
     subject_type: str = ""
+    member_count: int = 1
 
 
 class DomainEntityType(BaseModel):
@@ -302,6 +303,9 @@ class ReviewQueueItem(BaseModel):
     reasons: list[str] = Field(default_factory=list)
     evidence_count: int = 0
     polarities: dict[str, int] = Field(default_factory=dict)
+    cluster_key: str = ""
+    member_count: int = 1
+    members: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ReviewQueueResponse(BaseModel):

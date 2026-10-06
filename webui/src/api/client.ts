@@ -90,6 +90,9 @@ export interface ReviewQueueItem {
   reasons: string[];
   evidence_count: number;
   polarities: Record<string, number>;
+  cluster_key?: string;
+  member_count?: number;
+  members?: Array<{ claim_id: string; version: number; signature: string }>;
 }
 
 export interface TaskListItem {
@@ -115,6 +118,7 @@ export interface AggregationItem {
   reasons: string[];
   subject_name?: string;
   subject_type?: string;
+  member_count?: number;
 }
 
 export interface DomainEntityType {

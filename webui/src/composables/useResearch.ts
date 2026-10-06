@@ -144,6 +144,7 @@ const papers = computed(() => {
       pValue: '' as string,
       // 复核乐观锁需要的真实 claim 版本（reviewQueue 提供）
       claimVersion: claimVersions.value.get(agg.claim_id) ?? 1,
+      memberCount: agg.member_count ?? 1,
     };
   });
 });

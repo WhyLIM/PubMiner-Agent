@@ -132,6 +132,11 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
             ports.normalize, container.session_factory,
             resolver_name=f"composite@{container.pipeline_release}",
         )
+        # LLM 结果缓存：抽取/验证按内容哈希跨 run 复用（prompt_version 参与 key）
+        from pubminer.workflows.result_cache import CachedExtractPort, CachedVerifyPort
+
+        ports.extract = CachedExtractPort(ports.extract, prompt_version="extraction/biomarker@v1")
+        ports.verify = CachedVerifyPort(ports.verify, prompt_version="verification@v1")
         # goal parser 同时暴露给 API 层（parse-goal 端点检查 container.goal_parser）
         container.goal_parser = goal_parser
         # LLM 网关与 prompt 资产暴露给 API 层（证据问答 qa 端点使用）
