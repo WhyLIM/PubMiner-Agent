@@ -235,6 +235,10 @@ async function deleteCurrentTopic() {
     ElMessage.warning('当前没有活动课题');
     return;
   }
+  if (research.miningActive.value) {
+    ElMessage.warning('挖掘正在执行，请等待完成后再删除课题');
+    return;
+  }
   const claims = research.papers.value.length;
   const docs = research.documents.value.length;
 
