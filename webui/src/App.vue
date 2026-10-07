@@ -38,13 +38,6 @@
 
         <div class="flex items-center gap-2 shrink-0">
           <button
-            @click="customDialogVisible = true"
-            class="px-3 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 transition-colors font-medium text-xs"
-          >
-            <el-icon><Plus /></el-icon>
-            <span>新课题</span>
-          </button>
-          <button
             @click="activeTab = 'synthesis'"
             class="px-3 py-1.5 rounded-md border border-sky-200 bg-sky-50/60 hover:bg-sky-50 text-sky-800 flex items-center gap-1.5 transition-colors font-medium text-xs"
           >
@@ -97,57 +90,12 @@
       </div>
     </footer>
 
-    <!-- Custom Topic Modal Dialog -->
-    <el-dialog
-      v-model="customDialogVisible"
-      title="创建新文献挖掘课题"
-      width="560px"
-      :destroy-on-close="true"
-    >
-      <div class="space-y-4">
-        <p class="text-xs text-slate-500">
-          输入您要探索的生物医学研究问题（疾病、靶点、候选标志物等），将创建新会话并运行完整挖掘管线（检索 → 筛选 → 抽取 → 验证 → 聚合）。
-        </p>
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">研究课题 / 检索式</label>
-          <el-input
-            v-model="customInputQuery"
-            placeholder="例如: KRAS G12D inhibitor resistance, Alzheimer Tau phosphorylation"
-            clearable
-            @keyup.enter="submitCustomTopic"
-          />
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">推荐示例检索</label>
-          <div class="flex flex-wrap gap-1.5">
-            <button
-              v-for="sample in samplePresetQueries"
-              :key="sample"
-              @click="customInputQuery = sample"
-              class="px-2 py-1 rounded text-xs bg-slate-100 hover:bg-sky-50 hover:text-sky-700 transition-colors text-slate-600 text-left"
-            >
-              {{ sample }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <el-button @click="customDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitCustomTopic" :loading="isCreatingTopic">
-            启动挖掘管线
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import TopNav from './components/TopNav.vue';
 import LiteratureView from './components/LiteratureView.vue';
 import KnowledgeGraphView from './components/KnowledgeGraphView.vue';
@@ -226,47 +174,26 @@ onMounted(() => {
 
 function handleSelectTopic(topicId: string) {
   if (topicId === 'custom') {
-    customDialogVisible.value = true;
+    // 统一入口：新课题一律从文献页搜索框发起
+    activeTab.value = 'literature';
+    focusSearchInput();
     return;
   }
-  ElMessage.info('当前工作台为单一活动会话；创建新课题请选择「自定义研究课题」');
+  ElMessage.info('当前工作台为单一活动会话；开新课题请在文献页搜索框输入研究问题');
 }
 
 function handleTriggerAgent() {
-  // 协同中心已并入文献页的"管线执行监控"面板
+  // 语义=查看执行进度（不创建任务）
   activeTab.value = 'literature';
   research.workflowPanelOpen.value = true;
 }
 
-// Custom Topic Modal
-const customDialogVisible = ref(false);
-const customInputQuery = ref('');
-const isCreatingTopic = ref(false);
-
-const samplePresetQueries = [
-  'KRAS G12D mutation and colorectal cancer prognosis',
-  'Metformin longevity AMPK mTOR signaling',
-  'Tertiary lymphoid structures and immunotherapy in melanoma',
-];
-
-async function submitCustomTopic() {
-  const q = customInputQuery.value.trim();
-  if (!q) {
-    ElMessage.warning('请输入有效的课题关键词');
-    return;
-  }
-  isCreatingTopic.value = true;
-  customDialogVisible.value = false;
-  activeTab.value = 'literature';
-  try {
-    // 两段式启动：进入“研究目标确认”对话（AskHuman 澄清 + 检索式预览）
-    await research.startGoalSetup(q);
-    ElMessage.success('课题已创建，请在“研究目标确认”面板中完成确认');
-  } catch {
-    ElMessage.error(research.error.value ?? '会话创建失败');
-  } finally {
-    isCreatingTopic.value = false;
-  }
+/** 聚焦文献页搜索框（TopNav 课题下拉/新课题入口的统一去向） */
+function focusSearchInput() {
+  void nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('input[placeholder*="输入研究问题"]');
+    input?.focus();
+  });
 }
 
 function downloadBlob(content: string, filename: string, mime: string) {

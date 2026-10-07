@@ -6,10 +6,16 @@
         检索 → 获取原文 → 筛选 → 抽取 → 归一化 → 验证 → 覆盖门控 → (引文扩展循环) → 聚合；运行期间每 3 秒自动刷新。
       </p>
       <div class="flex items-center gap-2 shrink-0">
-        <el-button type="primary" size="small" @click="runPipeline" :loading="isRunning" :disabled="isRunning && !!runningTaskId">
-          <el-icon class="mr-1"><CaretRight /></el-icon>
-          {{ isRunning ? '执行中...' : hasSession ? '恢复/重跑管线' : '创建会话并运行' }}
-        </el-button>
+        <el-tooltip
+          content="新课题请使用上方搜索框输入研究问题；此处仅对当前会话恢复/重跑"
+          :disabled="hasSession"
+          placement="top"
+        >
+          <el-button type="primary" size="small" @click="runPipeline" :loading="isRunning" :disabled="!hasSession || isRunning">
+            <el-icon class="mr-1"><CaretRight /></el-icon>
+            恢复/重跑管线
+          </el-button>
+        </el-tooltip>
         <el-button size="small" @click="refreshSteps" :disabled="isRunning">
           <el-icon class="mr-1"><RefreshRight /></el-icon>
           刷新状态
@@ -58,7 +64,7 @@
       </div>
     </div>
 
-    <el-empty v-else description="尚未运行挖掘管线；创建会话并点击上方按钮启动" :image-size="72" />
+    <el-empty v-else description="尚未运行挖掘管线；请在上方搜索框输入研究问题启动新课题" :image-size="72" />
 
     <!-- Active Step Detail & Live Log -->
     <div v-if="steps.length" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -216,30 +222,18 @@ async function refreshSteps() {
 }
 
 async function runPipeline() {
+  if (!sessionId.value) {
+    // 统一入口：新课题一律从文献页搜索框发起（AskHuman 澄清 + 检索式确认）
+    runError.value = '当前没有可恢复的会话；请在上方搜索框输入研究问题启动新课题';
+    return;
+  }
   loading.value = true;
   runError.value = null;
   stepPinned.value = false;
   clearError();
   try {
-    if (!sessionId.value) {
-      const created = await agentApi.createSession({
-        goal: 'Collect prognostic biomarkers with independent cohort validation',
-        user_id: 'webui',
-      });
-      sessionId.value = created.session_id;
-      localStorage.setItem('pubminer-session-id', created.session_id);
-      await agentApi.parseGoal(created.session_id).catch(() => undefined);
-      const plan = await agentApi.submitPlan(created.session_id, {
-        rationale: 'auto',
-        steps: [
-          { id: 's1', action_type: 'SEARCH', status: 'pending' },
-          { id: 's2', action_type: 'EXTRACT', status: 'pending' },
-        ],
-      });
-      await agentApi.approvePlan(created.session_id, plan.plan_version);
-    }
-    // runAndWait 内部 startPolling + 等待终态 + refreshAll（W2: taskId 写入共享状态）
-    const task = await runAndWait(sessionId.value!, { max_results: 50 });
+    // runAndWait 内部 startPolling + 等待终态 + refreshAll
+    const task = await runAndWait(sessionId.value, { max_results: 50 });
     taskId.value = task.task_id;
     localSteps.value = taskSteps.value;
     ElMessage.success('管线执行完成');

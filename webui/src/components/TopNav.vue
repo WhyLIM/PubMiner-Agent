@@ -59,20 +59,20 @@
             <el-dropdown-item divided command="custom">
               <div class="flex items-center gap-1.5 text-sky-600 text-xs py-0.5 font-medium">
                 <el-icon><Plus /></el-icon>
-                <span>自定义研究课题与检索式...</span>
+                <span>新建课题（前往文献页搜索框）...</span>
               </div>
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
 
-      <!-- Run Agent Action Button -->
+      <!-- Execution Monitor Button（不创建任务，仅查看进度） -->
       <button
         @click="$emit('trigger-agent')"
         class="px-3 py-1.5 text-xs font-medium text-white bg-sky-700 hover:bg-sky-800 rounded-md transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
       >
-        <el-icon :size="13"><Cpu /></el-icon>
-        <span>运行 Agent</span>
+        <el-icon :size="13"><Monitor /></el-icon>
+        <span>执行监控</span>
       </button>
 
       <!-- Export Data Action -->
