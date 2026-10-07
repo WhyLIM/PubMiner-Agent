@@ -151,7 +151,13 @@
             <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
               领域预览（name: {{ domainPreview.name }}）— 可编辑后保存
             </div>
-            <el-input v-model="domainPreviewText" type="textarea" :rows="10" />
+            <el-input v-model="domainPreviewText" type="textarea" :rows="10" class="font-mono" />
+            <template v-if="domainPreviewFields">
+              <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                抽取字段预览（{{ domainPreviewFields.name }}）— 可编辑后一并保存
+              </div>
+              <el-input v-model="domainPreviewFieldsText" type="textarea" :rows="6" class="font-mono" />
+            </template>
             <div class="flex items-center gap-2">
               <el-button size="small" type="success" :loading="domainBusy" @click="saveDomain">保存并使用此领域</el-button>
               <el-button size="small" text @click="domainPreview = null">放弃</el-button>
@@ -987,7 +993,16 @@ const domainDescription = ref('');
 const domainJsonText = ref('');
 const domainPreview = ref<Record<string, unknown> | null>(null);
 const domainPreviewText = ref('');
+const domainPreviewFields = ref<Record<string, unknown> | null>(null);
+const domainPreviewFieldsText = ref('');
 const domainBusy = ref(false);
+
+function setDomainPreview(domain: Record<string, unknown>, extractionFields: Record<string, unknown> | null) {
+  domainPreview.value = domain;
+  domainPreviewText.value = JSON.stringify(domain, null, 2);
+  domainPreviewFields.value = extractionFields;
+  domainPreviewFieldsText.value = extractionFields ? JSON.stringify(extractionFields, null, 2) : '';
+}
 
 async function runGenerate() {
   if (!domainDescription.value.trim()) {
@@ -997,8 +1012,7 @@ async function runGenerate() {
   domainBusy.value = true;
   try {
     const res = await agentApi.generateDomainSchema(domainDescription.value.trim());
-    domainPreview.value = res.domain;
-    domainPreviewText.value = JSON.stringify(res.domain, null, 2);
+    setDomainPreview(res.domain, res.extraction_fields);
     ElMessage.success('领域定义已生成，请检查预览');
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : String(err));
@@ -1018,8 +1032,7 @@ async function runCalibrate() {
   domainBusy.value = true;
   try {
     const res = await agentApi.calibrateDomainSchema(payload);
-    domainPreview.value = res.domain;
-    domainPreviewText.value = JSON.stringify(res.domain, null, 2);
+    setDomainPreview(res.domain, res.extraction_fields);
     ElMessage.success('AI 已校准格式并补齐缺失字段，请检查预览');
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : String(err));
@@ -1030,17 +1043,22 @@ async function runCalibrate() {
 
 async function saveDomain() {
   let payload: Record<string, unknown>;
+  let efPayload: Record<string, unknown> | null = null;
   try {
     payload = JSON.parse(domainPreviewText.value);
+    if (domainPreviewFields.value) {
+      efPayload = JSON.parse(domainPreviewFieldsText.value);
+    }
   } catch {
     ElMessage.error('JSON 解析失败，请检查格式');
     return;
   }
   domainBusy.value = true;
   try {
-    const res = await agentApi.saveDomainSchema(payload);
+    const res = await agentApi.saveDomainSchema(payload, efPayload);
     if (setup.value) { setup.value.domainName = res.name; }
     domainPreview.value = null;
+    domainPreviewFields.value = null;
     domainTab.value = '';
     domainJsonText.value = '';
     domainDescription.value = '';

@@ -5,6 +5,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from pubminer.domain.claims import Direction, Predicate
+from pubminer.domain.entities import EntityType
+
+#: 领域定义中的枚举合法值（与 domain 模型强一致；生成/校准/保存共用同一门禁）
+LEGAL_PREDICATES = sorted(p.value for p in Predicate)
+LEGAL_ENTITY_TYPES = sorted(e.value for e in EntityType)
+LEGAL_DIRECTIONS = sorted(d.value for d in Direction)
+
 
 class FieldSpecModel(BaseModel):
     key: str = Field(..., description="字段键（存入 JSON 的键名）", pattern=r"^[a-z][a-z0-9_]*$")
@@ -47,13 +55,30 @@ class DomainSchemaModel(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def check_non_empty(self) -> "DomainSchemaModel":
+    def check_enum_mappings(self) -> "DomainSchemaModel":
+        """领域值必须能映射到 domain 枚举，否则管线使用时会崩溃。"""
         if not self.entity_types:
             raise ValueError("entity_types 不得为空")
         if not self.predicates:
             raise ValueError("predicates 不得为空")
         if not self.directions:
             raise ValueError("directions 不得为空")
+
+        bad_types = [k for k in self.entity_types if k not in LEGAL_ENTITY_TYPES]
+        if bad_types:
+            raise ValueError(
+                f"entity_types 含非法键 {bad_types}；合法值：{LEGAL_ENTITY_TYPES}"
+            )
+        bad_preds = sorted({v for v in self.predicates.values() if v not in LEGAL_PREDICATES})
+        if bad_preds:
+            raise ValueError(
+                f"predicates 含非法值 {bad_preds}；合法值：{LEGAL_PREDICATES}"
+            )
+        bad_dirs = sorted({d for d in self.directions if d not in LEGAL_DIRECTIONS})
+        if bad_dirs:
+            raise ValueError(
+                f"directions 含非法值 {bad_dirs}；合法值：{LEGAL_DIRECTIONS}"
+            )
         return self
 
 

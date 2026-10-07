@@ -24,10 +24,14 @@ class Predicate(str, Enum):
     THERAPEUTIC = "THERAPEUTIC"
     ASSOCIATED = "ASSOCIATED"
     CAUSATIVE = "CAUSATIVE"
+    INHIBITS = "INHIBITS"
+    ACTIVATES = "ACTIVATES"
+    BINDS = "BINDS"
+    MODULATES = "MODULATES"
 
 
 class Direction(str, Enum):
-    """表达方向（对预后类：高/低表达对应更差/更好结局）。"""
+    """合法方向值：表达类（预后）+ 结合方式类（药物靶点）。"""
 
     HIGH = "HIGH"
     LOW = "LOW"
@@ -38,6 +42,10 @@ class Direction(str, Enum):
     AMPLIFICATION = "AMPLIFICATION"
     DELETION = "DELETION"
     MUTATION = "MUTATION"
+    AGONIST = "AGONIST"
+    ANTAGONIST = "ANTAGONIST"
+    INHIBITOR = "INHIBITOR"
+    ACTIVATOR = "ACTIVATOR"
     UNSPECIFIED = "UNSPECIFIED"
 
 

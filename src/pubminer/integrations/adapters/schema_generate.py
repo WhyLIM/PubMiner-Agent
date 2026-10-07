@@ -20,6 +20,18 @@ logger = logging.getLogger("pubminer.schema_generate")
 _MAX_REPAIR_ATTEMPTS = 2
 
 
+def _legal_enums_text() -> str:
+    """从 domain 枚举动态生成合法值清单（注入 prompt，避免硬编码漂移）。"""
+    from pubminer.domain.claims import Direction, Predicate
+    from pubminer.domain.entities import EntityType
+
+    return (
+        f"- predicates 值只能取：{[p.value for p in Predicate]}\n"
+        f"- entity_types 键只能取：{[e.value for e in EntityType]}\n"
+        f"- directions 值只能取：{[d.value for d in Direction]}"
+    )
+
+
 def _extract_json(text: str) -> dict:
     """从 LLM 输出提取 JSON 对象（容忍 ```json 围栏）。"""
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
@@ -46,12 +58,13 @@ class SchemaGenerateAdapter:
         self.llm = llm
         self.prompts = prompt_registry
 
-    def _generate_raw(self, instruction: str, user_payload: str | None = None) -> dict:
+    def _generate_raw(self, instruction: str, user_payload: str | None = None) -> tuple[dict, dict | None]:
         prompt = self.prompts.get("schema-generate", "v1")
         render_vars: dict[str, str] = {
             "description": instruction,
             "existing_json": "",
             "previous_feedback": "",
+            "enums": _legal_enums_text(),
         }
         if user_payload is not None:
             render_vars["existing_json"] = (
@@ -72,7 +85,13 @@ class SchemaGenerateAdapter:
             )
             try:
                 raw = _extract_json(response.text or "")
-                return _validate_domain(raw.get("domain", raw))
+                domain = _validate_domain(raw.get("domain", raw))
+                extraction_fields = raw.get("extraction_fields")
+                if extraction_fields:
+                    from pubminer.workflows.schema_validation import ExtractionFieldsModel
+
+                    extraction_fields = ExtractionFieldsModel(**extraction_fields).model_dump()
+                return domain, extraction_fields
             except (ValueError, json.JSONDecodeError, ValidationError) as exc:
                 last_error = exc
                 render_vars["previous_feedback"] = (
@@ -82,11 +101,11 @@ class SchemaGenerateAdapter:
                 )
         raise ValueError(f"LLM 生成的领域定义无法通过校验：{last_error}")
 
-    def generate(self, description: str) -> dict:
-        """自然语言描述 → 完整领域 JSON。"""
+    def generate(self, description: str) -> tuple[dict, dict | None]:
+        """自然语言描述 → (领域 JSON, 抽取字段 JSON|None)。"""
         return self._generate_raw(description)
 
-    def calibrate(self, domain_json: dict) -> dict:
+    def calibrate(self, domain_json: dict) -> tuple[dict, dict | None]:
         """用户粘贴的 JSON → LLM 解析校准补齐 → 可校验格式。"""
         instruction = (
             "The user pasted a possibly incomplete or non-conforming domain definition JSON. "

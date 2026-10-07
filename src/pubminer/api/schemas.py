@@ -423,6 +423,7 @@ class QaResponse(BaseModel):
 
 class SchemaGeneratedResponse(BaseModel):
     domain: dict[str, Any]
+    extraction_fields: dict[str, Any] | None = None
 
 
 class CalibrateSchemaRequest(BaseModel):
@@ -431,6 +432,7 @@ class CalibrateSchemaRequest(BaseModel):
 
 class SaveSchemaRequest(BaseModel):
     domain: dict[str, Any]
+    extraction_fields: dict[str, Any] | None = None
     target_dir: str | None = None
 
 

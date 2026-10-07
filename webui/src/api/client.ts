@@ -405,21 +405,21 @@ export const agentApi = {
     ),
 
   generateDomainSchema: (description: string) =>
-    request<{ domain: Record<string, unknown> }>("/api/v1/schemas/generate", {
-      method: "POST",
-      body: JSON.stringify({ description }),
-    }),
+    request<{ domain: Record<string, unknown>; extraction_fields: Record<string, unknown> | null }>(
+      "/api/v1/schemas/generate",
+      { method: "POST", body: JSON.stringify({ description }) },
+    ),
 
   calibrateDomainSchema: (domain: Record<string, unknown>) =>
-    request<{ domain: Record<string, unknown> }>("/api/v1/schemas/calibrate", {
-      method: "POST",
-      body: JSON.stringify({ domain }),
-    }),
+    request<{ domain: Record<string, unknown>; extraction_fields: Record<string, unknown> | null }>(
+      "/api/v1/schemas/calibrate",
+      { method: "POST", body: JSON.stringify({ domain }) },
+    ),
 
-  saveDomainSchema: (domain: Record<string, unknown>) =>
+  saveDomainSchema: (domain: Record<string, unknown>, extractionFields?: Record<string, unknown> | null) =>
     request<{ ok: boolean; name: string; file: string }>("/api/v1/schemas/save", {
       method: "POST",
-      body: JSON.stringify({ domain }),
+      body: JSON.stringify({ domain, extraction_fields: extractionFields ?? undefined }),
     }),
 
   deleteSession: (sessionId: string) =>

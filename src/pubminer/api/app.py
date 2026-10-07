@@ -603,14 +603,14 @@ def create_app(container: Container) -> FastAPI:
 
     @app.post("/api/v1/schemas/generate")
     def generate_schema(body: schemas.GenerateSchemaRequest) -> schemas.SchemaGeneratedResponse:
-        """自然语言描述 → LLM 生成领域定义 JSON（强校验）。"""
+        """自然语言描述 → LLM 生成领域定义 + 抽取字段（强校验）。"""
         if container.schema_generator is None:
             raise HTTPException(503, "schema generator requires an LLM key (PUBMINER_LLM_API_KEY)")
         try:
-            domain = container.schema_generator.generate(body.description)
+            domain, extraction_fields = container.schema_generator.generate(body.description)
         except ValueError as exc:
             raise HTTPException(422, str(exc))
-        return schemas.SchemaGeneratedResponse(domain=domain)
+        return schemas.SchemaGeneratedResponse(domain=domain, extraction_fields=extraction_fields)
 
     @app.post("/api/v1/schemas/calibrate")
     def calibrate_schema(body: schemas.CalibrateSchemaRequest) -> schemas.SchemaGeneratedResponse:
@@ -618,16 +618,16 @@ def create_app(container: Container) -> FastAPI:
         if container.schema_generator is None:
             raise HTTPException(503, "schema generator requires an LLM key (PUBMINER_LLM_API_KEY)")
         try:
-            domain = container.schema_generator.calibrate(body.domain)
+            domain, extraction_fields = container.schema_generator.calibrate(body.domain)
         except ValueError as exc:
             raise HTTPException(422, str(exc))
-        return schemas.SchemaGeneratedResponse(domain=domain)
+        return schemas.SchemaGeneratedResponse(domain=domain, extraction_fields=extraction_fields)
 
     @app.post("/api/v1/schemas/save")
     def save_schema(body: schemas.SaveSchemaRequest) -> dict:
-        """校验后写入 schemas/domains/{name}.json（全局持久化）。"""
+        """校验后写入 schemas/domains/{name}.json；抽取字段（若有）一并保存并关联。"""
         from pubminer.workflows.domain_schema import DEFAULT_DOMAINS_DIR, load_domain
-        from pubminer.workflows.schema_validation import DomainSchemaModel
+        from pubminer.workflows.schema_validation import DomainSchemaModel, ExtractionFieldsModel
 
         try:
             model = DomainSchemaModel(**body.domain)
@@ -639,6 +639,16 @@ def create_app(container: Container) -> FastAPI:
         payload = dict(body.domain)
         if payload.get("object_label") is None:
             payload.pop("object_label", None)
+        # 抽取字段（可选）：保存到 schemas/extraction_fields/ 并自动关联到领域
+        ef = body.extraction_fields
+        if ef and ef.get("name"):
+            ExtractionFieldsModel(**ef)
+            ef_dir = target_dir.parent / "extraction_fields"
+            ef_dir.mkdir(parents=True, exist_ok=True)
+            (ef_dir / f"{ef['name']}.json").write_text(
+                json.dumps(ef, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            payload["extraction_fields_schema"] = ef["name"]
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         load_domain(target)  # 写入后回读校验
         return {"ok": True, "name": model.name, "file": str(target)}

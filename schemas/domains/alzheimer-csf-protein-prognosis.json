@@ -7,22 +7,20 @@
     "PROTEIN": "蛋白质",
     "GENE": "基因",
     "DISEASE": "疾病",
-    "BIOMARKER": "生物标志物",
-    "OUTCOME": "临床结局"
+    "CLINICAL_MARKER": "临床标志物"
   },
   "predicates": {
-    "predicts": "PREDICTS",
-    "associates_with": "ASSOCIATED_WITH",
-    "distinguishes": "DIFFERENTIATES",
-    "correlates": "CORRELATES_WITH"
+    "prognostic": "PROGNOSTIC",
+    "diagnostic": "DIAGNOSTIC",
+    "predictive": "PREDICTIVE",
+    "associate": "ASSOCIATED"
   },
   "directions": [
-    "UP",
-    "DOWN",
-    "INCREASED_RISK",
-    "DECREASED_RISK",
-    "ASSOCIATION",
-    "NO_ASSOCIATION"
+    "HIGH",
+    "LOW",
+    "POSITIVE",
+    "NEGATIVE",
+    "UNSPECIFIED"
   ],
   "outcome_hints": [
     "疾病进展",
