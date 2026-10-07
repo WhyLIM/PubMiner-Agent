@@ -16,7 +16,6 @@
 - **来源标注**：每条证据标注 evidence_source（abstract | fulltext），区分摘要与全文提取
 - **检索式透明**：LLM 生成检索式时同步输出中文解释，用户可预览、编辑、保存最终检索式
 - **人工审核门禁**：冲突优先的审核队列，多选批量操作，乐观锁防覆盖；Agent 无法自动发布
-- **CBD 格式导出**：`GET /api/v1/export/cbd` 输出 Colorectal Cancer Biomarker Database 兼容 JSON
 
 ## 架构
 
@@ -29,7 +28,7 @@ pubminer (FastAPI)
    ├─ domain/         领域模型与不变量
    ├─ integrations/   pubex 客户端 · LLM 协商 · Gene/PubTator resolver
    ├─ infrastructure/ SQLAlchemy ORM + Alembic 迁移 + 仓储
-   └─ api/            /api/v1 · SSE 事件流 · 审核决策 · CBD 导出
+   └─ api/            /api/v1 · SSE 事件流 · 审核决策 · 领域导出适配
    │
 pubex (SDK)           PubMed 检索/元数据 · PMC OA 全文 · 稳定 passage offset
    │
@@ -53,6 +52,8 @@ schemas/
 换研究领域 = 新建一个 JSON 文件 + `.env` 设 `PUBMINER_LLM_DOMAIN=新领域名`。
 
 领域 schema 同时驱动知识图谱的节点分类与图例：subject 按实体类型（GENE/PROTEIN/CLINICAL_MARKER/…）细分着色，object 侧标签取自 schema 的 `object_label` 字段。
+
+领域 schema 的 `export_mappings` 支持领域专属下游导出适配（如 biomarker 域的 CBD 数据库格式，`GET /api/v1/export/cbd`）——导出目标是各研究领域自己的扩展，不属于通用 Agent 主流程。
 
 领域 schema 支持三种来源（文献页"研究目标确认"面板 → 研究领域区）：直接使用内置定义、粘贴 JSON 后由 AI 解析校准补齐、或用自然语言描述由 AI 生成；预览确认后保存到 `schemas/domains/`，本次挖掘即时生效。
 

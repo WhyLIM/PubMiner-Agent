@@ -289,7 +289,7 @@ function csvEscape(value: string | number | boolean): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function handleExportReport(format: 'markdown' | 'csv' | 'json' | 'cbd') {
+function handleExportReport(format: 'markdown' | 'csv' | 'json') {
   const aggs = research.aggregations.value;
   if (!aggs.length) {
     ElMessage.warning('暂无数据可导出：请先运行一次挖掘管线');
@@ -324,22 +324,6 @@ function handleExportReport(format: 'markdown' | 'csv' | 'json' | 'cbd') {
     // \uFEFF BOM：保证 Excel 正确识别 UTF-8
     downloadBlob('\uFEFF' + [header.join(','), ...rows].join('\n'), 'PubMiner-Claims.csv', 'text/csv');
     ElMessage.success('已导出命题清单 CSV');
-  } else if (format === 'cbd') {
-    void (async () => {
-      try {
-        const res = await fetch('/api/v1/export/cbd?status=APPROVED&limit=500');
-        if (!res.ok) { throw new Error(`导出失败（${res.status}）`); }
-        const data = await res.json();
-        if (!data.items?.length) {
-          ElMessage.warning('没有已批准（APPROVED）的命题可导出；请先在文献页完成复核');
-          return;
-        }
-        downloadBlob(JSON.stringify(data, null, 2), 'PubMiner-CBD.json', 'application/json');
-        ElMessage.success(`已导出 CBD 格式 ${data.items.length} 条（仅含已批准命题）`);
-      } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err));
-      }
-    })();
   } else {
     const data = JSON.stringify({
       topic: currentTopic.value.title,

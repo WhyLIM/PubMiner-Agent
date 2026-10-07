@@ -85,7 +85,6 @@
             <el-dropdown-item command="markdown">导出综述报告 (.md)</el-dropdown-item>
             <el-dropdown-item command="csv">导出命题清单 (.csv)</el-dropdown-item>
             <el-dropdown-item command="json">导出三元组图谱 (.json)</el-dropdown-item>
-            <el-dropdown-item command="cbd" divided>导出 CBD 数据库 (.json，仅已批准)</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -126,7 +125,7 @@ const emit = defineEmits<{
   (e: 'update:activeTab', tab: string): void;
   (e: 'select-topic', topicId: string): void;
   (e: 'trigger-agent'): void;
-  (e: 'export-report', format: 'markdown' | 'csv' | 'json' | 'cbd'): void;
+  (e: 'export-report', format: 'markdown' | 'csv' | 'json'): void;
 }>();
 
 const navItems = computed(() => [
@@ -148,6 +147,6 @@ function handleSelectTopic(command: string) {
 }
 
 function handleExport(command: string) {
-  emit('export-report', command as 'markdown' | 'csv' | 'json' | 'cbd');
+  emit('export-report', command as 'markdown' | 'csv' | 'json');
 }
 </script>
