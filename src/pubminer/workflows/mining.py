@@ -123,6 +123,7 @@ class MiningWorkflow:
         task_id: UUID | None = None,
         screen_criteria: str | None = None,
         citation_expansion: bool = True,
+        domain: str | None = None,
     ) -> UUID:
         """创建任务并立即执行；返回 task_id。"""
         task_citation_expansion = citation_expansion and getattr(self.ports, "citations", None) is not None
@@ -134,6 +135,7 @@ class MiningWorkflow:
                 "intents": [i.__dict__ for i in intents],
                 "screen_criteria": screen_criteria,
                 "citation_expansion": task_citation_expansion,
+                "domain": domain,
             },
         )
         self.task_repo.create(task)
@@ -152,6 +154,13 @@ class MiningWorkflow:
     # ------------------------------------------------------------------ engine
 
     def _execute(self, task: Task, *, resume_from: int) -> UUID:
+        # 会话级领域覆盖：task.request["domain"] 优先于装配时默认（start/resume 通用）
+        domain_name = task.request.get("domain")
+        if domain_name and domain_name != getattr(self.domain, "name", None):
+            from pubminer.workflows.domain_schema import load_domain_by_name
+
+            self.domain = load_domain_by_name(str(domain_name))
+            logger.info("domain override: %s", domain_name)
         state: dict = {}
         sequence = self._sequence(task)
         for index, step_name in enumerate(sequence):

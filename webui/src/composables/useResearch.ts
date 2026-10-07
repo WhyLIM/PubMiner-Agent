@@ -84,6 +84,8 @@ export interface SetupState {
   intents: Array<{ name: string; query: string; explanation: string }>;
   /** 已进行的追问轮数（上限 3，避免循环） */
   rounds: number;
+  /** 自定义领域名（保存后设置；confirmAndRun 时随任务下发） */
+  domainName: string | null;
 }
 const setup = ref<SetupState | null>(null);
 
@@ -465,6 +467,7 @@ async function startGoalSetup(goal: string): Promise<void> {
     fields: {},
     intents: [],
     rounds: 0,
+    domainName: null,
   };
   workflowPanelOpen.value = false;
   try {
@@ -549,6 +552,7 @@ async function confirmAndRun(): Promise<void> {
       disease: (s.fields.disease as string) || null,
       task: (s.fields.task as string) || 'prognostic_biomarker',
       max_results: 50,
+      domain: s.domainName || undefined,
     });
     setup.value = null;
   } catch (err) {

@@ -54,7 +54,7 @@ schemas/
 
 领域 schema 同时驱动知识图谱的节点分类与图例：subject 按实体类型（GENE/PROTEIN/CLINICAL_MARKER/…）细分着色，object 侧标签取自 schema 的 `object_label` 字段。
 
-支持 LLM 自动生成领域 schema：描述你的研究领域，Agent 生成完整的 JSON 定义（含解释），预览确认后保存到 `schemas/` 目录。
+领域 schema 支持三种来源（文献页"研究目标确认"面板 → 研究领域区）：直接使用内置定义、粘贴 JSON 后由 AI 解析校准补齐、或用自然语言描述由 AI 生成；预览确认后保存到 `schemas/domains/`，本次挖掘即时生效。
 
 详见 [docs/domain-schema-spec.md](docs/domain-schema-spec.md)。
 

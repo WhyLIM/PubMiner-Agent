@@ -260,6 +260,7 @@ export const agentApi = {
     year_from?: number | null;
     max_results?: number;
     screen_criteria?: string | null;
+    domain?: string;
   }) =>
     request<{ task_id: string; status: string; plan_version: number }>(
       `/api/v1/agent/sessions/${sessionId}/run`,
@@ -391,6 +392,29 @@ export const agentApi = {
 
   getDocument: (documentId: string) =>
     request<DocumentDetail>(`/api/v1/documents/${documentId}`),
+
+  listDomainSchemas: () =>
+    request<{ schemas: Array<{ name: string; display: string; entity_label: string; default_task: string; object_label: string; file: string }> }>(
+      "/api/v1/schemas",
+    ),
+
+  generateDomainSchema: (description: string) =>
+    request<{ domain: Record<string, unknown> }>("/api/v1/schemas/generate", {
+      method: "POST",
+      body: JSON.stringify({ description }),
+    }),
+
+  calibrateDomainSchema: (domain: Record<string, unknown>) =>
+    request<{ domain: Record<string, unknown> }>("/api/v1/schemas/calibrate", {
+      method: "POST",
+      body: JSON.stringify({ domain }),
+    }),
+
+  saveDomainSchema: (domain: Record<string, unknown>) =>
+    request<{ ok: boolean; name: string; file: string }>("/api/v1/schemas/save", {
+      method: "POST",
+      body: JSON.stringify({ domain }),
+    }),
 
   askEvidence: (sessionId: string, question: string) =>
     request<{

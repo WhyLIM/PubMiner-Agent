@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request
@@ -110,11 +111,21 @@ def create_app(container: Container) -> FastAPI:
 
     @app.get("/api/v1/schemas")
     def list_schemas():
-        return {
-            "schemas": [
-                {"name": "biomarker_evidence", "version": "biomarker-v1", "status": "active"}
-            ]
-        }
+        """真实领域清单（schemas/domains/ 目录扫描）。"""
+        from pubminer.workflows.domain_schema import discover_domains, load_domain
+
+        domains = []
+        for name, path in discover_domains().items():
+            try:
+                d = load_domain(path)
+                domains.append({
+                    "name": d.name, "display": d.display,
+                    "entity_label": d.entity_label, "default_task": d.default_task,
+                    "object_label": d.object_label, "file": path.name,
+                })
+            except Exception:
+                continue
+        return {"schemas": domains}
 
     # ------------------------------------------------------------ agent sessions
 
@@ -581,6 +592,48 @@ def create_app(container: Container) -> FastAPI:
                 review_id=str(review.id),
             )
 
+    @app.post("/api/v1/schemas/generate")
+    def generate_schema(body: schemas.GenerateSchemaRequest) -> schemas.SchemaGeneratedResponse:
+        """自然语言描述 → LLM 生成领域定义 JSON（强校验）。"""
+        if container.schema_generator is None:
+            raise HTTPException(503, "schema generator requires an LLM key (PUBMINER_LLM_API_KEY)")
+        try:
+            domain = container.schema_generator.generate(body.description)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        return schemas.SchemaGeneratedResponse(domain=domain)
+
+    @app.post("/api/v1/schemas/calibrate")
+    def calibrate_schema(body: schemas.CalibrateSchemaRequest) -> schemas.SchemaGeneratedResponse:
+        """用户粘贴的领域 JSON → LLM 解析校准补齐 → 强校验格式。"""
+        if container.schema_generator is None:
+            raise HTTPException(503, "schema generator requires an LLM key (PUBMINER_LLM_API_KEY)")
+        try:
+            domain = container.schema_generator.calibrate(body.domain)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        return schemas.SchemaGeneratedResponse(domain=domain)
+
+    @app.post("/api/v1/schemas/save")
+    def save_schema(body: schemas.SaveSchemaRequest) -> dict:
+        """校验后写入 schemas/domains/{name}.json（全局持久化）。"""
+        from pubminer.workflows.domain_schema import DEFAULT_DOMAINS_DIR, load_domain
+        from pubminer.workflows.schema_validation import DomainSchemaModel
+
+        try:
+            model = DomainSchemaModel(**body.domain)
+        except ValidationError as exc:
+            raise HTTPException(422, f"领域定义校验失败：{exc}")
+        target_dir = Path(body.target_dir) if body.target_dir else DEFAULT_DOMAINS_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{model.name}.json"
+        payload = dict(body.domain)
+        if payload.get("object_label") is None:
+            payload.pop("object_label", None)
+        target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        load_domain(target)  # 写入后回读校验
+        return {"ok": True, "name": model.name, "file": str(target)}
+
     @app.get("/api/v1/agent/sessions")
     def list_sessions(limit: int = 20) -> schemas.SessionListResponse:
         from sqlalchemy import select
@@ -763,6 +816,7 @@ def create_app(container: Container) -> FastAPI:
                     session_id=sid,
                     intents=[SearchIntent(name="discovery", query=query, max_results=body.max_results)],
                     screen_criteria=screen_criteria,
+                    domain=body.domain,
                 )
             except WorkflowFatalError as exc:
                 raise HTTPException(422, str(exc))

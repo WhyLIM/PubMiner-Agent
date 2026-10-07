@@ -103,6 +103,63 @@
           </div>
         </div>
 
+        <!-- 研究领域（可选）：跟随解析任务 / 粘贴 JSON / AI 生成 -->
+        <div v-if="setup.phase !== 'running'" class="border-t border-slate-100 p-3 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 text-[11px]">
+              <span class="font-semibold text-slate-500 uppercase tracking-wide">研究领域</span>
+              <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
+                {{ setup.domainName || '默认（按任务自动匹配）' }}
+              </span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <el-button size="small" @click="domainTab = domainTab === 'paste' ? '' : 'paste'">粘贴 JSON</el-button>
+              <el-button size="small" @click="domainTab = domainTab === 'generate' ? '' : 'generate'">AI 生成</el-button>
+            </div>
+          </div>
+
+          <div v-if="domainTab" class="space-y-2">
+            <el-input
+              v-if="domainTab === 'generate'"
+              v-model="domainDescription"
+              size="small"
+              placeholder="描述研究领域（如：阿尔茨海默病脑脊液蛋白标志物，关注预后）…"
+            />
+            <el-input
+              v-else
+              v-model="domainJsonText"
+              type="textarea"
+              :rows="8"
+              placeholder='粘贴领域定义 JSON（可从现有 schema 修改）。粘贴后点"解析校准"，AI 会补齐缺失字段并规范化格式。'
+            />
+            <div class="flex items-center gap-2">
+              <el-button
+                size="small"
+                type="primary"
+                :loading="domainBusy"
+                @click="domainTab === 'generate' ? runGenerate() : runCalibrate()"
+              >
+                {{ domainTab === 'generate' ? 'AI 生成领域' : '解析校准' }}
+              </el-button>
+              <span class="text-[11px] text-slate-400">
+                {{ domainTab === 'generate' ? '根据描述生成完整领域定义' : 'AI 校准格式并补齐必填字段' }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="domainPreview" class="space-y-2">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+              领域预览（name: {{ domainPreview.name }}）— 可编辑后保存
+            </div>
+            <el-input v-model="domainPreviewText" type="textarea" :rows="10" />
+            <div class="flex items-center gap-2">
+              <el-button size="small" type="success" :loading="domainBusy" @click="saveDomain">保存并使用此领域</el-button>
+              <el-button size="small" text @click="domainPreview = null">放弃</el-button>
+              <span class="text-[11px] text-slate-400">保存后全局可用（schemas/domains/），本次挖掘自动使用</span>
+            </div>
+          </div>
+        </div>
+
         <!-- 检索式预览 / 编辑 + 主操作（无检索式时也可跳过/默认执行） -->
         <div v-if="setup.phase !== 'running' && setup.phase !== 'parsing'" class="border-t border-slate-100 p-3 space-y-2">
           <div v-if="setup.intents.length" class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">检索式（可直接编辑）</div>
@@ -923,6 +980,77 @@ const sortBy = ref<'evidence' | 'support' | 'contradict' | 'documents'>('evidenc
 
 /** isSearching 仅在挖掘管线真正运行时为 true（而非任何接口加载） */
 const isSearching = computed(() => miningActive.value);
+
+// ---- 研究领域（AskHuman 扩展：粘贴/生成/校准/保存） ----
+const domainTab = ref<'' | 'paste' | 'generate'>('');
+const domainDescription = ref('');
+const domainJsonText = ref('');
+const domainPreview = ref<Record<string, unknown> | null>(null);
+const domainPreviewText = ref('');
+const domainBusy = ref(false);
+
+async function runGenerate() {
+  if (!domainDescription.value.trim()) {
+    ElMessage.warning('请先描述研究领域');
+    return;
+  }
+  domainBusy.value = true;
+  try {
+    const res = await agentApi.generateDomainSchema(domainDescription.value.trim());
+    domainPreview.value = res.domain;
+    domainPreviewText.value = JSON.stringify(res.domain, null, 2);
+    ElMessage.success('领域定义已生成，请检查预览');
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : String(err));
+  } finally {
+    domainBusy.value = false;
+  }
+}
+
+async function runCalibrate() {
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(domainJsonText.value);
+  } catch {
+    ElMessage.error('JSON 解析失败，请检查格式');
+    return;
+  }
+  domainBusy.value = true;
+  try {
+    const res = await agentApi.calibrateDomainSchema(payload);
+    domainPreview.value = res.domain;
+    domainPreviewText.value = JSON.stringify(res.domain, null, 2);
+    ElMessage.success('AI 已校准格式并补齐缺失字段，请检查预览');
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : String(err));
+  } finally {
+    domainBusy.value = false;
+  }
+}
+
+async function saveDomain() {
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(domainPreviewText.value);
+  } catch {
+    ElMessage.error('JSON 解析失败，请检查格式');
+    return;
+  }
+  domainBusy.value = true;
+  try {
+    const res = await agentApi.saveDomainSchema(payload);
+    if (setup.value) { setup.value.domainName = res.name; }
+    domainPreview.value = null;
+    domainTab.value = '';
+    domainJsonText.value = '';
+    domainDescription.value = '';
+    ElMessage.success(`领域「${res.name}」已保存，本次挖掘将使用该领域`);
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : String(err));
+  } finally {
+    domainBusy.value = false;
+  }
+}
 
 // ---- 管线执行监控面板 ----
 const wfLiveStatus = computed(() => taskStatus.value);

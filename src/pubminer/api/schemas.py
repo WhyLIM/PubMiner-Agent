@@ -371,6 +371,7 @@ class RunSessionRequest(BaseModel):
     year_from: int | None = None
     max_results: int = Field(5, ge=1, le=100)
     screen_criteria: str | None = None
+    domain: str | None = None
 
 
 class RunSessionResponse(BaseModel):
@@ -418,6 +419,19 @@ class QaResponse(BaseModel):
     generated_by: str = "template"
     citations: list[QaCitationItem] = Field(default_factory=list)
     matched_claims: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class SchemaGeneratedResponse(BaseModel):
+    domain: dict[str, Any]
+
+
+class CalibrateSchemaRequest(BaseModel):
+    domain: dict[str, Any]
+
+
+class SaveSchemaRequest(BaseModel):
+    domain: dict[str, Any]
+    target_dir: str | None = None
 
 
 class GenerateSchemaRequest(BaseModel):

@@ -1,0 +1,66 @@
+{
+  "name": "alzheimer-csf-protein-prognosis",
+  "display": "阿尔茨海默病脑脊液蛋白预后标志物",
+  "entity_label": "阿尔茨海默病脑脊液蛋白标志物与预后关系",
+  "default_task": "extraction",
+  "entity_types": {
+    "PROTEIN": "蛋白质",
+    "GENE": "基因",
+    "DISEASE": "疾病",
+    "BIOMARKER": "生物标志物",
+    "OUTCOME": "临床结局"
+  },
+  "predicates": {
+    "predicts": "PREDICTS",
+    "associates_with": "ASSOCIATED_WITH",
+    "distinguishes": "DIFFERENTIATES",
+    "correlates": "CORRELATES_WITH"
+  },
+  "directions": [
+    "UP",
+    "DOWN",
+    "INCREASED_RISK",
+    "DECREASED_RISK",
+    "ASSOCIATION",
+    "NO_ASSOCIATION"
+  ],
+  "outcome_hints": [
+    "疾病进展",
+    "认知衰退速度",
+    "转化为阿尔茨海默病",
+    "疾病分期",
+    "死亡率",
+    "治疗反应",
+    "生存期"
+  ],
+  "signature_template": "{subject}在脑脊液中{predicate}{object}",
+  "verification": {
+    "p_value_threshold": 0.05,
+    "iv_min_documents": 3
+  },
+  "screen_hints": "筛选阿尔茨海默病脑脊液蛋白质组学研究，关注蛋白标志物与预后（进展、认知下降、转化）相关的文献；排除单纯诊断或药理机制研究。",
+  "extraction_fields_schema": null,
+  "export_mappings": {
+    "PROTEIN": {
+      "database": "UniProt",
+      "id_field": "uniprot_id"
+    },
+    "GENE": {
+      "database": "Entrez",
+      "id_field": "entrez_id"
+    },
+    "DISEASE": {
+      "database": "MeSH",
+      "id_field": "mesh_id"
+    },
+    "BIOMARKER": {
+      "database": "UniProt",
+      "id_field": "uniprot_id"
+    },
+    "OUTCOME": {
+      "database": "MeSH",
+      "id_field": "mesh_id"
+    }
+  },
+  "object_label": "疾病/临床结局"
+}

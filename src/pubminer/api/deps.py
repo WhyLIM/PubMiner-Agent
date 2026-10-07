@@ -142,6 +142,10 @@ def build_container_from_env(env: dict | None = None) -> tuple[Container, list[s
         # LLM 网关与 prompt 资产暴露给 API 层（证据问答 qa 端点使用）
         container.llm = gateway
         container.prompt_registry = prompt_registry
+        # 领域 schema 生成/校准适配器（schemas 端点使用）
+        from pubminer.integrations.adapters.schema_generate import SchemaGenerateAdapter
+
+        container.schema_generator = SchemaGenerateAdapter(gateway, prompt_registry)
 
     # embedding service（万级文献筛选预过滤）
     llm_key = env.get("PUBMINER_LLM_API_KEY", "")
@@ -172,6 +176,7 @@ class Container:
     embedding_service: Any = None
     llm: Any = None
     prompt_registry: Any = None
+    schema_generator: Any = None
 
     def next_request_id(self) -> str:
         self.request_counter += 1
