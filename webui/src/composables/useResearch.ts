@@ -619,6 +619,7 @@ async function confirmAndRun(): Promise<void> {
       disease: (s.fields.disease as string) || null,
       task: (s.fields.task as string) || 'prognostic_biomarker',
       year_from: (s.fields.year_from as number) || undefined,
+      year_to: (s.fields.year_to as number) || undefined,
       max_results: 50,
       domain: s.domainName || undefined,
     });

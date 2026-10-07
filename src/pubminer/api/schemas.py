@@ -369,6 +369,7 @@ class RunSessionRequest(BaseModel):
     disease: str | None = None
     task: str = "prognostic_biomarker"
     year_from: int | None = None
+    year_to: int | None = None
     max_results: int = Field(5, ge=1, le=100)
     screen_criteria: str | None = None
     domain: str | None = None

@@ -258,6 +258,7 @@ export const agentApi = {
     disease?: string | null;
     task?: string;
     year_from?: number | null;
+    year_to?: number | null;
     max_results?: number;
     screen_criteria?: string | null;
     domain?: string;

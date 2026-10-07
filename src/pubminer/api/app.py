@@ -833,7 +833,8 @@ def create_app(container: Container) -> FastAPI:
                 service.bind_task_spec(
                     sid,
                     schemas.BindTaskSpecRequest(
-                        disease=body.disease, task=body.task, year_from=body.year_from
+                        disease=body.disease, task=body.task,
+                        year_from=body.year_from, year_to=body.year_to,
                     ),
                     goal_text=current.goal,
                 )
@@ -842,6 +843,8 @@ def create_app(container: Container) -> FastAPI:
                     422, "no TaskSpec bound; provide disease via request body or bind first"
                 )
 
+            # 程序化日期过滤：TaskSpec 有年份且检索式未自带日期时追加 [pdat] 限定，
+            # 避免 TaskSpec 与 LLM 检索式的年份意图脱节
             plan = service.submit_plan(
                 sid,
                 Plan(
@@ -859,6 +862,22 @@ def create_app(container: Container) -> FastAPI:
             task_word = current.task_spec.task if current.task_spec else body.task
             query = f"{disease or ''} {task_word or ''} biomarker".strip()
             query, _stripped = validate_query(query)
+            # 程序化日期过滤：TaskSpec 有年份且检索式未自带日期时追加 [pdat] 限定，
+            # 避免 TaskSpec 与检索式的年份意图脱节
+            date_frag = None
+            if body.year_from or body.year_to:
+                yf = body.year_from or 1900
+                yt = body.year_to or 3000
+                date_frag = f"{yf}:{yt}[pdat]"
+            if date_frag is not None and "[pdat]" not in query and date_frag not in query:
+                query = f"({query}) AND {date_frag}"
+            intents = [
+                SearchIntent(
+                    name="discovery",
+                    query=query,
+                    max_results=body.max_results,
+                )
+            ]
             screen_criteria = body.screen_criteria or (
                 f"{disease or 'the target disease'} / {task_word or 'biomarker'} / "
                 "independent cohort validation preferred"
@@ -875,7 +894,7 @@ def create_app(container: Container) -> FastAPI:
             try:
                 task_id = workflow.start(
                     session_id=sid,
-                    intents=[SearchIntent(name="discovery", query=query, max_results=body.max_results)],
+                    intents=intents,
                     screen_criteria=screen_criteria,
                     domain=body.domain,
                 )

@@ -34,7 +34,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--goal", required=True, help="自然语言研究目标")
     parser.add_argument("--disease", default="pancreatic cancer", help="疾病（TaskSpec）")
     parser.add_argument("--task", default="prognostic_biomarker")
-    parser.add_argument("--year-from", type=int, default=2020)
+    parser.add_argument("--year-from", type=int, default=2020, help="检索起始年份（追加到 PubMed 日期过滤）")
+    parser.add_argument("--year-to", type=int, default=None, help="检索截止年份（默认不限制）")
     parser.add_argument("--max-results", type=int, default=15)
     parser.add_argument("--domain", default=None, help="领域定义名（schemas/domains/ 下的 JSON 名，默认 biomarker）")
     parser.add_argument("--db", default=None, help="覆盖 PUBMINER_DB_URL")
@@ -69,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         service.post_message(sid, "user", args.goal)
         service.bind_task_spec(
             sid,
-            TaskSpecInput(disease=args.disease, task=args.task, year_from=args.year_from),
+            TaskSpecInput(disease=args.disease, task=args.task, year_from=args.year_from, year_to=args.year_to),
             goal_text=args.goal,
         )
         plan = service.submit_plan(
