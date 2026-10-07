@@ -157,19 +157,22 @@ const topics = computed(() => {
     id: s.session_id,
     title: s.goal || '(未命名课题)',
     meta: `${s.created_at.slice(0, 10)} · ${s.status}`,
+    time: s.created_at,
     isCurrent: s.session_id === research.sessionId.value,
   }));
-  // 当前会话可能尚未出现在清单（极新的），补到最前
+  // 当前会话可能尚未出现在清单（拉取失败等边缘情况），追加到末尾
   const currentId = research.sessionId.value;
   if (currentId && !list.some(t => t.id === currentId)) {
-    list.unshift({
+    list.push({
       id: currentId,
       title: currentTopic.value.title || '(未命名课题)',
-      meta: '',
+      meta: sessionStatus.value || 'ACTIVE',
+      time: '',
       isCurrent: true,
     });
   }
-  return list.sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+  // 固定按创建时间降序（新 → 旧），切换课题不改变顺序
+  return list.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 });
 
 const shortSessionId = computed(() => (research.session.value?.session_id ?? '').slice(0, 8) || '—');
