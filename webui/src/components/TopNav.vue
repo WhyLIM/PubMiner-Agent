@@ -52,8 +52,8 @@
               :disabled="t.id === currentTopicId"
             >
               <div class="py-0.5">
-                <div class="font-medium text-xs text-slate-800">{{ t.title }}</div>
-                <div class="text-[11px] text-slate-400 font-mono truncate max-w-[280px]">{{ t.englishTitle }}</div>
+                <div class="font-medium text-xs text-slate-800 max-w-[300px] truncate">{{ t.title }}</div>
+                <div v-if="t.meta" class="text-[11px] text-slate-400 font-mono">{{ t.meta }}</div>
               </div>
             </el-dropdown-item>
             <el-dropdown-item divided command="custom">
@@ -110,14 +110,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ResearchTopic } from '../types';
 
 /** 构建时注入的版本号（单一来源：package.json，与后端 pyproject.toml 对齐） */
 const appVersion = __APP_VERSION__;
 
 const props = defineProps<{
   activeTab: string;
-  topics: ResearchTopic[];
+  topics: Array<{ id: string; title: string; meta?: string }>;
   currentTopicId: string;
   paperCount: number;
 }>();
@@ -138,7 +137,9 @@ const navItems = computed(() => [
 
 const currentTopicTitle = computed(() => {
   const t = props.topics.find(item => item.id === props.currentTopicId);
-  return t ? t.title.split(' ')[0] : '研究课题';
+  if (!t) { return '研究课题'; }
+  const first = t.title.split(' ')[0] ?? t.title;
+  return first.length > 24 ? first.slice(0, 24) + '…' : first;
 });
 
 function handleSelectTopic(command: string) {

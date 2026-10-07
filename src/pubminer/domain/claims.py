@@ -120,6 +120,7 @@ class Claim(BaseModel):
     status: ClaimStatus = ClaimStatus.CANDIDATE
     version: int = Field(1, description="业务版本；published 后修订产生新 version")
     created_by: str = Field("agent", description="agent | curator:user_id")
+    session_id: UUID | None = Field(None, description="产出该命题的会话（多课题隔离）")
     created_at: datetime = Field(default_factory=lambda: datetime.now())
     updated_at: datetime = Field(default_factory=lambda: datetime.now())
 

@@ -31,6 +31,7 @@ class ClaimRow(Base):
     status: Mapped[str] = mapped_column(String(32), default="CANDIDATE", nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_by: Mapped[str] = mapped_column(String(128), default="agent")
+    session_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

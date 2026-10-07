@@ -365,8 +365,10 @@ export const agentApi = {
   getClaimEvidence: (claimId: string) =>
     request<ClaimEvidence>(`/api/v1/claims/${claimId}/evidence`),
 
-  getReviewQueue: () =>
-    request<{ items: ReviewQueueItem[] }>("/api/v1/reviews/queue"),
+  getReviewQueue: (sessionId?: string) =>
+    request<{ items: ReviewQueueItem[] }>(
+      `/api/v1/reviews/queue${sessionId ? `?session_id=${sessionId}` : ''}`,
+    ),
 
   submitReviewDecision: (body: {
     claim_id: string;
@@ -381,14 +383,18 @@ export const agentApi = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
-  getAggregations: (limit = 1000) =>
-    request<{ aggregations: AggregationItem[] }>(`/api/v1/verification/aggregations?limit=${limit}`),
+  getAggregations: (limit = 1000, sessionId?: string) =>
+    request<{ aggregations: AggregationItem[] }>(
+      `/api/v1/verification/aggregations?limit=${limit}${sessionId ? `&session_id=${sessionId}` : ''}`,
+    ),
 
   listDomains: () =>
     request<{ domains: DomainInfo[] }>("/api/v1/domains"),
 
-  listDocuments: (limit = 100) =>
-    request<{ documents: DocumentItem[] }>(`/api/v1/documents?limit=${limit}`),
+  listDocuments: (limit = 100, sessionId?: string) =>
+    request<{ documents: DocumentItem[] }>(
+      `/api/v1/documents?limit=${limit}${sessionId ? `&session_id=${sessionId}` : ''}`,
+    ),
 
   getDocument: (documentId: string) =>
     request<DocumentDetail>(`/api/v1/documents/${documentId}`),

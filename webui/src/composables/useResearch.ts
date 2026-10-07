@@ -33,6 +33,7 @@ const claims = ref<ClaimItem[]>([]);
 const aggregations = ref<AggregationItem[]>([]);
 const documents = ref<DocumentItem[]>([]);
 const domains = ref<DomainInfo[]>([]);
+const sessions = ref<Array<{ session_id: string; goal: string; status: string; created_at: string }>>([]);
 const reviewQueue = ref<ReviewQueueItem[]>([]);
 const tasks = ref<TaskListItem[]>([]);
 const evidenceSpans = ref<EvidenceSpanItem[]>([]);
@@ -292,6 +293,7 @@ async function init() {
       refreshTasks(),
       refreshDocuments(),
       refreshDomains(),
+      refreshSessions(),
     ]);
     if (sessionId.value) {
       await refreshSession();
@@ -307,12 +309,40 @@ async function refreshClaims() {
   claims.value = (await agentApi.listClaims('CANDIDATE')).claims;
 }
 
+/** 课题切换：切换活动会话并按新会话刷新全部数据 */
+async function switchSession(id: string) {
+  if (id === sessionId.value) { return; }
+  sessionId.value = id;
+  localStorage.setItem(SESSION_KEY, id);
+  evidenceSpans.value = [];
+  selectedClaimId.value = null;
+  loading.value = true;
+  try {
+    await Promise.all([
+      refreshSession(),
+      refreshAggregations(),
+      refreshDocuments(),
+      refreshQueue(),
+      refreshCoverage(),
+      refreshSessions(),
+    ]);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function refreshSessions() {
+  try {
+    sessions.value = (await agentApi.listSessions(50)).sessions;
+  } catch { /* 清单不可用时下拉仅显示当前课题 */ }
+}
+
 async function refreshAggregations() {
-  aggregations.value = (await agentApi.getAggregations(1000)).aggregations;
+  aggregations.value = (await agentApi.getAggregations(1000, sessionId.value ?? undefined)).aggregations;
 }
 
 async function refreshDocuments() {
-  documents.value = (await agentApi.listDocuments(1000)).documents;
+  documents.value = (await agentApi.listDocuments(1000, sessionId.value ?? undefined)).documents;
 }
 
 async function refreshDomains() {
@@ -322,7 +352,7 @@ async function refreshDomains() {
 }
 
 async function refreshQueue() {
-  reviewQueue.value = (await agentApi.getReviewQueue()).items;
+  reviewQueue.value = (await agentApi.getReviewQueue(sessionId.value ?? undefined)).items;
 }
 
 async function refreshTasks() {
@@ -603,6 +633,7 @@ export function useResearch() {
     init, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
     refreshDocuments, refreshSession, refreshCoverage, refreshAll,
+    sessions, switchSession, refreshSessions,
     startPolling, runAndWait, clearError,
     startGoalSetup, sendClarification, confirmAndRun, closeSetup,
   };

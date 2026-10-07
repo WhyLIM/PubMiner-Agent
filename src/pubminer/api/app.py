@@ -415,11 +415,14 @@ def create_app(container: Container) -> FastAPI:
         return schemas.DomainsResponse(domains=domains)
 
     @app.get("/api/v1/documents")
-    def list_documents(limit: int = 100) -> schemas.DocumentsResponse:
+    def list_documents(limit: int = 100, session_id: str | None = None) -> schemas.DocumentsResponse:
         with session_scope(container.session_factory) as session:
             repo = container.document_repository(session)
             return schemas.DocumentsResponse(
-                documents=[schemas.DocumentItem(**d) for d in repo.list_documents_with_evidence(limit=limit)]
+                documents=[schemas.DocumentItem(**d) for d in repo.list_documents_with_evidence(
+                    limit=limit,
+                    session_id=_parse_uuid(session_id, "session_id") if session_id else None,
+                )]
             )
 
     @app.get("/api/v1/documents/{document_id}")
@@ -432,14 +435,17 @@ def create_app(container: Container) -> FastAPI:
             return schemas.DocumentDetail(**detail)
 
     @app.get("/api/v1/verification/aggregations")
-    def verification_aggregations(limit: int = 200) -> schemas.AggregationsResponse:
+    def verification_aggregations(limit: int = 200, session_id: str | None = None) -> schemas.AggregationsResponse:
         from pubminer.workflows.verification import CrossPaperVerifier
 
         with session_scope(container.session_factory) as session:
             claim_repo = container.claim_repository(session)
             entity_repo = container.entity_repository(session)
             verifier = CrossPaperVerifier(claim_repo)
-            aggregations = verifier.aggregate(session, limit=limit)
+            aggregations = verifier.aggregate(
+                session, limit=limit,
+                session_id=_parse_uuid(session_id, "session_id") if session_id else None,
+            )
             # 批量解析 subject 实体名（签名中只有本体编号，图谱/卡片需要可读名称）
             items: list[schemas.AggregationItem] = []
             for agg in aggregations:
@@ -474,7 +480,7 @@ def create_app(container: Container) -> FastAPI:
             )
 
     @app.get("/api/v1/reviews/queue")
-    def review_queue() -> schemas.ReviewQueueResponse:
+    def review_queue(session_id: str | None = None) -> schemas.ReviewQueueResponse:
         from collections import Counter
 
         with session_scope(container.session_factory) as session:
@@ -489,7 +495,10 @@ def create_app(container: Container) -> FastAPI:
                     {"claim_id": str(c.id), "version": c.version, "signature": c.canonical_signature}
                 )
             items: list[schemas.ReviewQueueItem] = []
-            for agg in verifier.aggregate(session, limit=1000):
+            for agg in verifier.aggregate(
+                session, limit=1000,
+                session_id=_parse_uuid(session_id, "session_id") if session_id else None,
+            ):
                 if agg.status not in ("CANDIDATE", "REVIEWED"):
                     continue
                 claim = claim_repo.get(agg.claim_id)
@@ -747,6 +756,7 @@ def create_app(container: Container) -> FastAPI:
                 embedding_service=container.embedding_service,
                 llm=container.llm,
                 prompt_registry=container.prompt_registry,
+                session_id=sid,
             )
             result = qa.answer(body.question)
             return schemas.QaResponse(

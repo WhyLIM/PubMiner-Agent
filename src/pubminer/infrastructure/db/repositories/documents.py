@@ -67,19 +67,25 @@ class DocumentRepository:
         row = self.session.get(DocumentRow, document_id)
         return self._to_domain(row) if row else None
 
-    def list_documents_with_evidence(self, limit: int = 100) -> list[dict]:
+    def list_documents_with_evidence(self, limit: int = 100, *, session_id=None) -> list[dict]:
         """文献级聚合（轻量，不含正文）：metadata + 标识符 + 关联 claim/evidence 极性统计。
 
-        按证据数降序；无证据文献也返回（claims 为空）。
+        按证据数降序；session_id 给定时仅统计该会话的 claim/evidence。
         """
         from collections import Counter
 
         from pubminer.infrastructure.db.orm_claims import ClaimRow, EvidenceRow
 
-        doc_rows = self.session.execute(select(DocumentRow)).scalars().unique().all()
-        pairs = self.session.execute(
-            select(EvidenceRow, ClaimRow).join(ClaimRow, ClaimRow.id == EvidenceRow.claim_id)
-        ).all()
+        pair_stmt = select(EvidenceRow, ClaimRow).join(ClaimRow, ClaimRow.id == EvidenceRow.claim_id)
+        if session_id is not None:
+            pair_stmt = pair_stmt.where(ClaimRow.session_id == session_id)
+        pairs = self.session.execute(pair_stmt).all()
+        if session_id is not None:
+            # 会话过滤：仅列出有该会话证据的文献
+            doc_ids = {ev.document_id for ev, _ in pairs}
+            doc_rows = [d for d in self.session.execute(select(DocumentRow)).scalars().unique().all() if d.id in doc_ids]
+        else:
+            doc_rows = self.session.execute(select(DocumentRow)).scalars().unique().all()
 
         evidence_by_doc: dict[UUID, list] = {}
         for ev, claim in pairs:

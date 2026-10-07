@@ -77,8 +77,11 @@ class CrossPaperVerifier:
     def __init__(self, claim_repo: ClaimRepository) -> None:
         self.claim_repo = claim_repo
 
-    def aggregate(self, session: Session, limit: int = 200, *, cluster: bool = True) -> list[ClaimAggregation]:
-        claims = self.claim_repo.list_claims(limit=limit)
+    def aggregate(
+        self, session: Session, limit: int = 200, *,
+        cluster: bool = True, session_id=None,
+    ) -> list[ClaimAggregation]:
+        claims = self.claim_repo.list_claims(limit=limit, session_id=session_id)
         if not cluster:
             result = [
                 self.aggregate_one(claim, self.claim_repo.get_evidence(claim.id))
@@ -143,7 +146,7 @@ class CrossPaperVerifier:
 
     def coverage_snapshot(self, session: Session, session_id: UUID, turn: int = 0) -> CoverageSnapshot:
         """关键问题覆盖矩阵：由会话 TaskSpec 生成多行问题（疾病/任务/验证/冲突/不确定）。"""
-        aggregations = self.aggregate(session, limit=1000)
+        aggregations = self.aggregate(session, limit=1000, session_id=session_id)
         spec = _session_task_spec(session, session_id)
         questions = self._coverage_questions(aggregations, spec)
         gaps: list[str] = []

@@ -58,6 +58,7 @@ class ClaimRepository:
             status=claim.status.value,
             version=claim.version,
             created_by=claim.created_by,
+            session_id=claim.session_id,
             created_at=claim.created_at,
             updated_at=claim.updated_at,
         )
@@ -94,12 +95,17 @@ class ClaimRepository:
         row = self.session.get(ClaimRow, claim_id)
         return self._claim_from_row(row) if row else None
 
-    def list_claims(self, statuses: list[str] | None = None, limit: int = 200) -> list[Claim]:
+    def list_claims(
+        self, statuses: list[str] | None = None, limit: int = 200,
+        *, session_id=None,
+    ) -> list[Claim]:
         from sqlalchemy import select
 
         stmt = select(ClaimRow).limit(limit)
         if statuses:
             stmt = stmt.where(ClaimRow.status.in_(statuses))
+        if session_id is not None:
+            stmt = stmt.where(ClaimRow.session_id == session_id)
         rows = self.session.execute(stmt).scalars().all()
         return [self._claim_from_row(row) for row in rows]
 
@@ -171,6 +177,7 @@ class ClaimRepository:
             status=ClaimStatus(row.status),
             version=row.version,
             created_by=row.created_by,
+            session_id=row.session_id,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )

@@ -113,7 +113,7 @@ const activeTab = ref('literature');
  * 任何刷新/轮询更新都会自动传播到所有子视图（替代旧的手动快照 + watch）。
  */
 const currentTopic = computed(() => ({
-  id: 'pubminer',
+  id: research.sessionId.value || 'pubminer',
   title: research.session.value?.goal ?? 'PubMiner Evidence Agent',
   englishTitle: research.session.value?.session_id.slice(0, 8) ?? '',
   subtitle: 'Active mining session',
@@ -143,7 +143,26 @@ const currentTopic = computed(() => ({
   reviewReport: '',
 }));
 
-const topics = computed(() => [currentTopic.value]);
+/** 课题下拉：全部历史会话（当前会话排最前），选择即切换 */
+const topics = computed(() => {
+  const list = research.sessions.value.map(s => ({
+    id: s.session_id,
+    title: s.goal || '(未命名课题)',
+    meta: `${s.created_at.slice(0, 10)} · ${s.status}`,
+    isCurrent: s.session_id === research.sessionId.value,
+  }));
+  // 当前会话可能尚未出现在清单（极新的），补到最前
+  const currentId = research.sessionId.value;
+  if (currentId && !list.some(t => t.id === currentId)) {
+    list.unshift({
+      id: currentId,
+      title: currentTopic.value.title || '(未命名课题)',
+      meta: '',
+      isCurrent: true,
+    });
+  }
+  return list.sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+});
 
 const shortSessionId = computed(() => (research.session.value?.session_id ?? '').slice(0, 8) || '—');
 const sessionStatus = computed(() => research.session.value?.status ?? null);
@@ -172,14 +191,19 @@ onMounted(() => {
   void research.init();
 });
 
-function handleSelectTopic(topicId: string) {
+async function handleSelectTopic(topicId: string) {
   if (topicId === 'custom') {
     // 统一入口：新课题一律从文献页搜索框发起
     activeTab.value = 'literature';
     focusSearchInput();
     return;
   }
-  ElMessage.info('当前工作台为单一活动会话；开新课题请在文献页搜索框输入研究问题');
+  try {
+    await research.switchSession(topicId);
+    ElMessage.success('已切换课题，数据已按该课题刷新');
+  } catch {
+    ElMessage.error(research.error.value ?? '课题切换失败');
+  }
 }
 
 function handleTriggerAgent() {

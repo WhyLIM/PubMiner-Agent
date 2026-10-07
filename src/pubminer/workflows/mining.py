@@ -605,6 +605,7 @@ class MiningWorkflow:
             )
             polarity = self._polarity_for(state, first_extraction["biomarker_mention"])
             claim = self._build_claim(signature, subject_entity, evidence_model, state)
+            claim.session_id = task.session_id
             disease_mesh = self._disease_mesh_id(state, evidence_model.disease_mention, disease_resolutions)
             if disease_mesh:
                 claim.context.disease_mesh_id = disease_mesh

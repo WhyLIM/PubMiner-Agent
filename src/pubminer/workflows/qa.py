@@ -84,8 +84,10 @@ class EvidenceQA:
         embedding_service: EmbeddingService | None = None,
         llm=None,
         prompt_registry=None,
+        session_id=None,
     ) -> None:
         self.session = session
+        self.session_id = session_id
         self.claim_repo = claim_repo
         self.entity_repo = entity_repo
         self.embedding_service = embedding_service
@@ -117,7 +119,9 @@ class EvidenceQA:
 
         claim_repo = self.claim_repo
         verifier = CrossPaperVerifier(claim_repo)
-        aggregations = verifier.aggregate(self.session, limit=MAX_CLAIMS_FOR_RETRIEVAL)
+        aggregations = verifier.aggregate(
+            self.session, limit=MAX_CLAIMS_FOR_RETRIEVAL, session_id=self.session_id
+        )
         if not aggregations:
             return []
 
