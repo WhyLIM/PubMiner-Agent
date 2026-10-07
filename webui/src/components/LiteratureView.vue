@@ -895,7 +895,7 @@ const {
   submitReviewDecision,
   workflowPanelOpen, taskStatus, taskSteps,
   setup, startGoalSetup, sendClarification, confirmAndRun, closeSetup,
-  reviewQueue,
+  reviewQueue, refreshClaims, refreshAggregations,
 } = useResearch();
 
 const searchQuery = ref('');
@@ -1262,12 +1262,17 @@ async function groupReview(paper: PaperRow, status: 'included' | 'excluded') {
   let fail = 0;
   for (const m of members) {
     try {
-      await submitReviewDecision(m.claim_id, decision, `Group review: ${status}`, m.version);
+      // 直调 API：整组结束后统一刷新，避免逐成员 3 请求
+      await agentApi.submitReviewDecision({
+        claim_id: m.claim_id, decision, reviewer_id: 'curator',
+        reason: `Group review: ${status}`, expected_version: m.version,
+      });
       ok += 1;
     } catch {
       fail += 1; // 单个成员失败（如已被终审）不阻断整组
     }
   }
+  await Promise.all([refreshQueue(), refreshClaims(), refreshAggregations()]);
   if (fail) {
     ElMessage.warning(`整组操作完成：成功 ${ok} 条，失败 ${fail} 条（可能已被终审）`);
   } else {

@@ -184,7 +184,7 @@ class EvidenceQA:
 
     # ------------------------------------------------------------------ 生成
 
-    def _template_answer(self, question: str, entries: list[dict], fragments: list[str], citations: list[QaCitation]) -> str:
+    def _template_answer(self, entries: list[dict], fragments: list[str], citations: list[QaCitation]) -> str:
         if not entries:
             return "在当前证据库中未找到与该问题相关的命题。可尝试换用基因/药物/表型关键词，或先扩大检索范围重跑管线。"
         lines: list[str] = []
@@ -243,7 +243,7 @@ class EvidenceQA:
                 logger.warning("qa llm generation failed, fallback to template: %s", exc)
 
         return QaResult(
-            answer=self._template_answer(question, entries, fragments, citations),
+            answer=self._template_answer(entries, fragments, citations),
             generated_by="template",
             citations=citations,
             matched_claims=matched,
