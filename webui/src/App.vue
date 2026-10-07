@@ -38,6 +38,14 @@
 
         <div class="flex items-center gap-2 shrink-0">
           <button
+            @click="deleteCurrentTopic"
+            class="px-3 py-1.5 rounded-md border border-rose-200 hover:bg-rose-50 text-rose-700 flex items-center gap-1.5 transition-colors font-medium text-xs"
+            title="删除当前课题及其全部数据"
+          >
+            <el-icon><Delete /></el-icon>
+            <span>删除课题</span>
+          </button>
+          <button
             @click="activeTab = 'synthesis'"
             class="px-3 py-1.5 rounded-md border border-sky-200 bg-sky-50/60 hover:bg-sky-50 text-sky-800 flex items-center gap-1.5 transition-colors font-medium text-xs"
           >
@@ -102,7 +110,7 @@ import KnowledgeGraphView from './components/KnowledgeGraphView.vue';
 import AnalyticsView from './components/AnalyticsView.vue';
 import SynthesisReviewView from './components/SynthesisReviewView.vue';
 import { Paper } from './types';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { useResearch } from './composables/useResearch';
 
 const research = useResearch();
@@ -220,6 +228,48 @@ function focusSearchInput() {
   });
 }
 
+/** 删除当前课题：两次确认（概览 → 不可恢复警告），完成后切换到最近课题 */
+async function deleteCurrentTopic() {
+  const sid = research.sessionId.value;
+  if (!sid) {
+    ElMessage.warning('当前没有活动课题');
+    return;
+  }
+  const claims = research.papers.value.length;
+  const docs = research.documents.value.length;
+
+  const first = await ElMessageBox.confirm(
+    `将删除课题「${currentTopic.value.title}」及其全部数据：${claims} 条命题、${docs} 篇文献、任务记录与对话。该操作不可撤销。`,
+    '删除课题',
+    { confirmButtonText: '继续', cancelButtonText: '取消', type: 'warning' },
+  ).then(() => true).catch(() => false);
+  if (!first) { return; }
+
+  const second = await ElMessageBox.confirm(
+    '再次确认：删除后数据无法恢复，确定要永久删除该课题吗？',
+    '不可恢复操作',
+    { confirmButtonText: '永久删除', cancelButtonText: '取消', type: 'error', confirmButtonClass: 'el-button--danger' },
+  ).then(() => true).catch(() => false);
+  if (!second) { return; }
+
+  try {
+    const res = await research.deleteSession(sid);
+    const d = res.deleted;
+    ElMessage.success(`课题已删除（命题 ${d.claims} · 证据 ${d.evidence} · 任务 ${d.tasks}）`);
+    // 切换到最近保留的课题；全部删光则清空工作台
+    localStorage.removeItem('pubminer-session-id');
+    await research.refreshSessions();
+    const next = research.sessions.value[0];
+    if (next) {
+      await research.switchSession(next.session_id);
+    } else {
+      research.clearActiveSession();
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : String(err));
+  }
+}
+
 function downloadBlob(content: string, filename: string, mime: string) {
   const blob = new Blob([content], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
@@ -235,7 +285,7 @@ function csvEscape(value: string | number | boolean): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function handleExportReport(format: 'markdown' | 'csv' | 'json') {
+function handleExportReport(format: 'markdown' | 'csv' | 'json' | 'cbd') {
   const aggs = research.aggregations.value;
   if (!aggs.length) {
     ElMessage.warning('暂无数据可导出：请先运行一次挖掘管线');
@@ -270,6 +320,22 @@ function handleExportReport(format: 'markdown' | 'csv' | 'json') {
     // \uFEFF BOM：保证 Excel 正确识别 UTF-8
     downloadBlob('\uFEFF' + [header.join(','), ...rows].join('\n'), 'PubMiner-Claims.csv', 'text/csv');
     ElMessage.success('已导出命题清单 CSV');
+  } else if (format === 'cbd') {
+    void (async () => {
+      try {
+        const res = await fetch('/api/v1/export/cbd?status=APPROVED&limit=500');
+        if (!res.ok) { throw new Error(`导出失败（${res.status}）`); }
+        const data = await res.json();
+        if (!data.items?.length) {
+          ElMessage.warning('没有已批准（APPROVED）的命题可导出；请先在文献页完成复核');
+          return;
+        }
+        downloadBlob(JSON.stringify(data, null, 2), 'PubMiner-CBD.json', 'application/json');
+        ElMessage.success(`已导出 CBD 格式 ${data.items.length} 条（仅含已批准命题）`);
+      } catch (err) {
+        ElMessage.error(err instanceof Error ? err.message : String(err));
+      }
+    })();
   } else {
     const data = JSON.stringify({
       topic: currentTopic.value.title,

@@ -14,6 +14,8 @@ from pubminer.application.commands.agent_session import TaskSpecInput
 from pubminer.domain.agents import Plan, PlanStep
 from pubminer.settings import load_env_file
 
+from pubminer.workflows.domain_schema import load_domain_by_name
+
 
 def _ensure_schema(session_factory) -> None:
     """开发便利：SQLite 空库时直接建表（生产请用 alembic）。"""
@@ -34,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task", default="prognostic_biomarker")
     parser.add_argument("--year-from", type=int, default=2020)
     parser.add_argument("--max-results", type=int, default=15)
+    parser.add_argument("--domain", default=None, help="领域定义名（schemas/domains/ 下的 JSON 名，默认 biomarker）")
     parser.add_argument("--db", default=None, help="覆盖 PUBMINER_DB_URL")
     args = parser.parse_args(argv)
 
@@ -89,12 +92,14 @@ def main(argv: list[str] | None = None) -> int:
             claim_repo_factory=_repo("claims"),
             entity_repo_factory=_repo("entities"),
             task_repo=container.task_repository(session),
+            domain=(load_domain_by_name(args.domain) if args.domain else None),
             pipeline_release=f"cli-{args.task}",
         )
         task_id = workflow.start(
             session_id=sid,
             intents=[SearchIntent(name="discovery", query=f"{args.disease} {args.task.replace('_', ' ')} biomarker", max_results=args.max_results)],
             screen_criteria=criteria,
+            domain=(args.domain),
         )
         task = container.task_repository(session).get(task_id)
         print(f"[agent] task {task_id} -> {task.status.value if task else 'CREATED'}")

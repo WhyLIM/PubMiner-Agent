@@ -309,6 +309,36 @@ async function refreshClaims() {
   claims.value = (await agentApi.listClaims('CANDIDATE')).claims;
 }
 
+/** 删除课题及其全部数据（后端级联），随后清空本地活动状态 */
+async function deleteSession(id: string) {
+  stopPolling();
+  const res = await agentApi.deleteSession(id);
+  if (sessionId.value === id) {
+    clearActiveSession();
+  }
+  await refreshSessions();
+  return res;
+}
+
+/** 清空活动会话状态（全部课题被删除后的空工作台） */
+function clearActiveSession() {
+  sessionId.value = null;
+  localStorage.removeItem(SESSION_KEY);
+  session.value = null;
+  aggregations.value = [];
+  documents.value = [];
+  claims.value = [];
+  reviewQueue.value = [];
+  evidenceSpans.value = [];
+  selectedClaimId.value = null;
+  coverage.value = null;
+  stopPolling();
+  runningTaskId.value = null;
+  taskStatus.value = null;
+  taskSteps.value = [];
+  events.value = [];
+}
+
 /** 课题切换：切换活动会话并按新会话刷新全部数据 */
 async function switchSession(id: string) {
   if (id === sessionId.value) { return; }
@@ -588,6 +618,7 @@ async function confirmAndRun(): Promise<void> {
     await runAndWait(sessionId.value, {
       disease: (s.fields.disease as string) || null,
       task: (s.fields.task as string) || 'prognostic_biomarker',
+      year_from: (s.fields.year_from as number) || undefined,
       max_results: 50,
       domain: s.domainName || undefined,
     });
@@ -640,7 +671,7 @@ export function useResearch() {
     init, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
     refreshDocuments, refreshSession, refreshCoverage, refreshAll,
-    sessions, switchSession, refreshSessions,
+    sessions, switchSession, refreshSessions, deleteSession, clearActiveSession,
     startPolling, runAndWait, clearError,
     startGoalSetup, sendClarification, confirmAndRun, closeSetup,
   };

@@ -422,6 +422,17 @@ export const agentApi = {
       body: JSON.stringify({ domain }),
     }),
 
+  deleteSession: (sessionId: string) =>
+    request<{
+      ok: boolean;
+      deleted: { claims: number; evidence: number; reviews: number; tasks: number; run_steps: number; messages: number };
+    }>(`/api/v1/agent/sessions/${sessionId}`, { method: "DELETE" }),
+
+  cancelTask: (taskId: string) =>
+    request<{ task_id: string; status: string }>(`/api/v1/tasks/${taskId}/actions/cancel`, {
+      method: "POST",
+    }),
+
   askEvidence: (sessionId: string, question: string) =>
     request<{
       answer: string;

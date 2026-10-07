@@ -643,6 +643,47 @@ def create_app(container: Container) -> FastAPI:
         load_domain(target)  # 写入后回读校验
         return {"ok": True, "name": model.name, "file": str(target)}
 
+    @app.delete("/api/v1/agent/sessions/{session_id}")
+    def delete_session(session_id: str) -> dict:
+        """删除课题及其全部数据：命题/证据/审核记录/任务/步骤/消息/会话。
+
+        documents 为全局去重语料，不随课题删除（重跑可复用水合结果）。
+        """
+        from sqlalchemy import delete as sa_delete, select
+
+        from pubminer.domain.reviews import ReviewTargetType
+        from pubminer.infrastructure.db.orm_agents import AgentMessageRow, AgentSessionRow
+        from pubminer.infrastructure.db.orm_claims import ClaimRow, EvidenceRow
+        from pubminer.infrastructure.db.orm_reviews import ReviewRow
+        from pubminer.infrastructure.db.orm_tasks import RunStepRow, TaskRow
+
+        sid = _parse_uuid(session_id, "session")
+        with session_scope(container.session_factory) as session:
+            claim_ids = select(ClaimRow.id).where(ClaimRow.session_id == sid)
+            task_ids = select(TaskRow.id).where(TaskRow.session_id == sid)
+            evidence_n = session.execute(
+                sa_delete(EvidenceRow).where(EvidenceRow.claim_id.in_(claim_ids))
+            ).rowcount
+            review_n = session.execute(
+                sa_delete(ReviewRow).where(
+                    ReviewRow.target_type == ReviewTargetType.CLAIM.value,
+                    ReviewRow.target_id.in_(claim_ids),
+                )
+            ).rowcount
+            claims_n = session.execute(sa_delete(ClaimRow).where(ClaimRow.session_id == sid)).rowcount
+            steps_n = session.execute(sa_delete(RunStepRow).where(RunStepRow.task_id.in_(task_ids))).rowcount
+            tasks_n = session.execute(sa_delete(TaskRow).where(TaskRow.session_id == sid)).rowcount
+            msgs_n = session.execute(sa_delete(AgentMessageRow).where(AgentMessageRow.session_id == sid)).rowcount
+            sess_row = session.get(AgentSessionRow, sid)
+            if sess_row is None:
+                raise HTTPException(404, f"session {session_id} not found")
+            session.delete(sess_row)
+            return {
+                "ok": True,
+                "deleted": {"claims": claims_n, "evidence": evidence_n, "reviews": review_n,
+                            "tasks": tasks_n, "run_steps": steps_n, "messages": msgs_n},
+            }
+
     @app.get("/api/v1/agent/sessions")
     def list_sessions(limit: int = 20) -> schemas.SessionListResponse:
         from sqlalchemy import select
