@@ -4,10 +4,11 @@
 
 ## 特性
 
-- **一键研究**：一句话目标 → LLM 解析约束（含歧义追问）→ 检索 → 三级筛选 → 结构化抽取 → 归一化 → 验证 → 独立验证检测 → 聚合
+- **对话式一键研究**：一句话目标 → AI 解析并展示检索式（可编辑）→ 信息不足时对话追问 → 确认后执行检索 → 三级筛选 → 结构化抽取 → 归一化 → 验证 → 覆盖度门控 → 引文扩展循环 → 聚合
+- **多课题工作台**：历史课题随时切换，命题/文献/图谱/综述按课题隔离；课题可删除（双重确认，级联清除全部数据）
 - **证据锚定**：每条结论绑定论文原文 span（固定 offset + content hash），UI 在完整原文上下文中高亮定位，可跳转文献详情与 PubMed/DOI 原文
 - **命题 / 文献双视图**：按聚合命题或按文献真实题录（标题/期刊/年份/PMID/PMCID）浏览同一批证据，带分页与高级过滤
-- **三级筛选级联**：embedding 余弦预筛（万级跳过 80%）→ LLM 摘要筛选 → UNCERTAIN 全文重筛
+- **三级筛选级联**：embedding 余弦预筛（自适应阈值，向量持久化缓存）→ LLM 摘要筛选 → UNCERTAIN 全文重筛
 - **span 二次修复**：LLM 改写导致 span 定位失败时，自动用 mention 锚定窗口重新摘录
 - **双源归一化**：NCBI Gene + PubTator 3 交叉验证，缩写歧义自动送审，标识符只来自 resolver
 - **迭代扩展**：独立验证未发现时自动经引文扩展（cited-by/references）拉入新文献再验证
@@ -15,7 +16,10 @@
 - **四极性验证**：同一结论同时保留 SUPPORT / CONTRADICT / NO_EFFECT / UNCERTAIN 证据
 - **来源标注**：每条证据标注 evidence_source（abstract | fulltext），区分摘要与全文提取
 - **检索式透明**：LLM 生成检索式时同步输出中文解释，用户可预览、编辑、保存最终检索式
-- **人工审核门禁**：冲突优先的审核队列，多选批量操作，乐观锁防覆盖；Agent 无法自动发布
+- **同义命题聚簇**：同一标志物的多条写法（实体编号版/未解析版）自动合并计数，独立验证判定更准；支持整组批准/否决
+- **LLM 结果缓存**：抽取/验证按内容哈希 + prompt 版本跨 run 复用，重跑同批文献不再重复付费
+- **覆盖度矩阵**：按研究目标生成多问覆盖评估（主问题/独立验证/冲突识别/不确定处理），驱动引文扩展决策
+- **人工审核门禁**：冲突优先的审核队列，乐观锁防覆盖；Agent 无法自动发布
 
 ## 架构
 
@@ -24,7 +28,7 @@ webui (Vue 3 + Element Plus + ECharts 工作台)
    │  /api/v1
 pubminer (FastAPI)
    ├─ agents/         有界 Orchestrator · 停止策略 · 覆盖评估
-   ├─ workflows/      挖掘管线（七步 + 引文扩展）· 领域 schema · 解析缓存
+   ├─ workflows/      挖掘管线（七步 + 引文扩展）· 领域 schema · 解析/LLM 结果缓存 · RAG 证据问答
    ├─ domain/         领域模型与不变量
    ├─ integrations/   pubex 客户端 · LLM 协商 · Gene/PubTator resolver
    ├─ infrastructure/ SQLAlchemy ORM + Alembic 迁移 + 仓储
@@ -49,7 +53,7 @@ schemas/
     └── generic.json        # 通用（无额外字段）
 ```
 
-换研究领域 = 新建一个 JSON 文件 + `.env` 设 `PUBMINER_LLM_DOMAIN=新领域名`。
+换研究领域有三种方式（无需写代码）：启动挖掘后在"研究目标确认"面板直接粘贴 JSON（AI 校准补齐）、用自然语言描述由 AI 生成、或按规范手写 JSON 存入 `schemas/domains/` 并设 `.env` 的 `PUBMINER_LLM_DOMAIN`。
 
 领域 schema 同时驱动知识图谱的节点分类与图例：subject 按实体类型（GENE/PROTEIN/CLINICAL_MARKER/…）细分着色，object 侧标签取自 schema 的 `object_label` 字段。
 
@@ -85,10 +89,10 @@ pnpm dev                          # http://localhost:3001
 
 | 视图 | 功能 |
 |---|---|
-| 文献检索挖掘 | 输入研究问题启动挖掘 · 按命题/按文献双视图 · 分页与高级过滤 · 批准/待定/否决复核 · 可展开"管线执行监控"面板（14 步状态/输出摘要/事件流/断点恢复） |
+| 文献检索挖掘 | 输入研究问题启动挖掘（对话式澄清 + 检索式编辑 + 领域选择）· 按命题/按文献双视图 · 分页与高级过滤 · 批准/待定/否决与整组复核 · 可展开"管线执行监控"面板（14 步状态/输出摘要/实时事件流/断点恢复） |
 | 知识图谱 | 力导向实体关系图 · 节点按实体类型着色（图例跟随领域 schema）· 类型筛选 · 实体定位 · 导出 PNG |
 | 多维学术分析 | 证据强度堆叠图 · 实体关联热力图 · 极性分布 · 支持证据排行 |
-| 证据合成综述 | 自动生成 Markdown 综述（含覆盖度评估）· 证据溯源问答（本地证据检索 + 原文片段） |
+| 证据合成综述 | 自动生成 Markdown 综述（含多问覆盖度矩阵）· 证据溯源问答（语义+关键词混合检索，AI 仅依据原文片段作答并编号引用） |
 
 证据抽屉（命题/文献均可展开）：极性汇总 · 完整原文上下文中的 span 高亮 · 偏移与文档溯源 · PubMed/PMCID/DOI 外链。
 
@@ -98,7 +102,7 @@ pnpm dev                          # http://localhost:3001
 .venv\Scripts\pubminer-agent --goal "寻找2020年以来胰腺癌预后biomarker，并确认是否存在独立队列验证"
 ```
 
-支持参数：`--disease`（疾病）、`--task`（任务类型）、`--year-from`（起始年）、`--max-results`（检索上限）、`--db`（覆盖数据库 URL）。
+支持参数：`--disease`（疾病）、`--task`（任务类型）、`--year-from`（起始年）、`--max-results`（检索上限）、`--domain`（领域定义名）、`--db`（覆盖数据库 URL）。
 
 ## LLM 供应商
 
@@ -131,11 +135,11 @@ pnpm dev                          # http://localhost:3001
 │   ├── pubminer/        # Agent 后端（domain / agents / workflows / integrations / infrastructure / api）
 │   └── pubex/           # 文献获取解析 SDK
 ├── webui/               # Vue 3 + Element Plus + ECharts 前端
-├── prompts/             # 版本化 prompt 资产（agent-policy / screening / extraction / verification / goal-parse / schema-generate）
+├── prompts/             # 版本化 prompt 资产（agent-policy / screening / extraction / verification / goal-parse / schema-generate / qa-answer）
 ├── schemas/             # 领域定义 + 抽取字段 schema
 │   ├── domains/         # 领域定义（biomarker / drug-target / …）
 │   └── extraction_fields/  # 抽取字段（colorectal / generic / …）
-├── migrations/          # Alembic 0001–0007
+├── migrations/          # Alembic 0001–0009
 ├── tests/               # 统一测试套件
 ├── docs/                # 领域 Schema 规范
 ├── examples/            # 离线演示
