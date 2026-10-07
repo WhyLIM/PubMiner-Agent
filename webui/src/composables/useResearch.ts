@@ -316,6 +316,12 @@ async function switchSession(id: string) {
   localStorage.setItem(SESSION_KEY, id);
   evidenceSpans.value = [];
   selectedClaimId.value = null;
+  // 清空监控状态：避免残留上一个会话的步骤/事件
+  stopPolling();
+  runningTaskId.value = null;
+  taskStatus.value = null;
+  taskSteps.value = [];
+  events.value = [];
   loading.value = true;
   try {
     await Promise.all([
@@ -324,6 +330,7 @@ async function switchSession(id: string) {
       refreshDocuments(),
       refreshQueue(),
       refreshCoverage(),
+      refreshTasks(),
       refreshSessions(),
     ]);
   } finally {

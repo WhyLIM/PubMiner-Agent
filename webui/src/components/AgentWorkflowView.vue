@@ -147,6 +147,11 @@ const {
   refreshTasks, startPolling, runAndWait, clearError,
 } = useResearch();
 
+/** 仅当前会话的任务（切换课题后不显示其它会话的运行） */
+const sessionTasks = computed(() =>
+  tasks.value.filter(t => !sessionId.value || t.session_id === sessionId.value)
+);
+
 const activeStepIndex = ref(0);
 /** 用户手动点选步骤后，轮询不再自动跳到 RUNNING 步（新开一轮运行时重置） */
 const stepPinned = ref(false);
@@ -198,7 +203,7 @@ function stepLabel(type: string): string {
 async function loadLatestTask() {
   try {
     await refreshTasks();
-    const latest = tasks.value[0];
+    const latest = sessionTasks.value[0];
     if (!latest) { return; }
     taskId.value = latest.task_id;
     if (latest.status === 'RUNNING' || latest.status === 'CREATED') {

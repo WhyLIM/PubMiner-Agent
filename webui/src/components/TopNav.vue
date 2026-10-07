@@ -37,7 +37,7 @@
     <!-- Zone 3: 1-2 primary actions -->
     <div class="flex items-center gap-2.5 shrink-0">
       <!-- Scenario Selector -->
-      <el-dropdown trigger="click" @command="handleSelectTopic">
+      <el-dropdown trigger="click" :max-height="360" @command="handleSelectTopic">
         <button class="px-2.5 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 transition-colors">
           <el-icon :size="13" class="text-sky-600"><Collection /></el-icon>
           <span class="max-w-[140px] sm:max-w-[180px] truncate">{{ currentTopicTitle }}</span>
