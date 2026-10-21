@@ -42,9 +42,10 @@ class CachedExtractPort:
             cached = ResultCacheRepository(session).get("extract", key)
             if cached is not None:
                 self.cache_hits += 1
-                from pubminer.domain.evidence import Evidence
+                from pubminer.domain.evidence import BiomarkerEvidence
 
-                evidences = [Evidence.model_validate(e) for e in cached.get("evidences", [])]
+                # 抽取阶段产出的是 BiomarkerEvidence（claim 尚未创建），勿用 Evidence 校验
+                evidences = [BiomarkerEvidence.model_validate(e) for e in cached.get("evidences", [])]
                 study_ctx = cached.get("study_context")
                 return evidences, study_ctx
 
@@ -63,6 +64,8 @@ class CachedExtractPort:
                 },
                 prompt_version=self.prompt_version,
             )
+            # 逐篇提交：释放 SQLite 写锁，避免管线长事务阻塞轮询/其它请求
+            session.commit()
         return evidence_items, study_ctx
 
 
@@ -99,4 +102,6 @@ class CachedVerifyPort:
             ResultCacheRepository(session).put(
                 "verify", key, result.model_dump(mode="json"), prompt_version=self.prompt_version,
             )
+            # 逐条提交：释放写锁（VERIFY 阶段 LLM 调用密集，同 extract）
+            session.commit()
         return result
