@@ -172,8 +172,14 @@
           <div v-else class="text-[11px] text-slate-400">尚未生成检索式；补充信息后会自动重新生成，也可按默认参数直接执行。</div>
           <div v-for="(si, i) in setup.intents" :key="i" class="space-y-0.5">
             <div class="flex items-center gap-2">
-              <span class="text-[11px] text-slate-500 w-24 shrink-0 truncate" :title="si.name">{{ si.name }}</span>
-              <el-input v-model="si.query" size="small" class="font-mono" />
+              <el-checkbox
+                v-model="si.enabled"
+                size="small"
+                class="shrink-0"
+                :title="si.enabled ? '参与本次挖掘；取消则跳过该检索式' : '已禁用，不参与本次挖掘'"
+              />
+              <span class="text-[11px] text-slate-500 w-20 shrink-0 truncate" :title="si.name">{{ si.name }}</span>
+              <el-input v-model="si.query" size="small" class="font-mono" :disabled="!si.enabled" />
             </div>
             <div v-if="si.explanation" class="text-[11px] text-slate-400 pl-[6.5rem]">{{ si.explanation }}</div>
           </div>

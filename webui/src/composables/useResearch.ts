@@ -95,7 +95,7 @@ export interface SetupState {
   goal: string;
   messages: SetupChatMessage[];
   fields: Record<string, unknown>;
-  intents: Array<{ name: string; query: string; explanation: string }>;
+  intents: Array<{ name: string; query: string; explanation: string; enabled: boolean }>;
   /** 已进行的追问轮数（上限 3，避免循环） */
   rounds: number;
   /** 自定义领域名（保存后设置；confirmAndRun 时随任务下发） */
@@ -570,7 +570,7 @@ async function applyParse() {
   try {
     const res = await agentApi.parseGoal(sessionId.value);
     s.fields = res.fields ?? {};
-    s.intents = res.search_intents ?? [];
+    s.intents = (res.search_intents ?? []).map(si => ({ ...si, enabled: true }));
     s.messages.push({ sender: 'ai', text: buildGoalSummary(s.fields, s.intents) });
     // 追问触发：LLM 结构化问题（dsh 式卡片），或缺失必填字段（确定性信号 → 生成结构化卡片）
     const clarification = res.clarification ?? {};
@@ -630,8 +630,9 @@ async function confirmAndRun(): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    if (s.intents.length) {
-      await agentApi.saveSearchIntents(sessionId.value, s.intents).catch(() => undefined);
+    const enabledIntents = s.intents.filter(i => i.enabled);
+    if (enabledIntents.length) {
+      await agentApi.saveSearchIntents(sessionId.value, enabledIntents).catch(() => undefined);
     }
     const plan = await agentApi.submitPlan(sessionId.value, {
       rationale: 'auto: discovery -> extract -> verify',
