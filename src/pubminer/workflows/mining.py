@@ -380,12 +380,19 @@ class MiningWorkflow:
                 try:
                     candidates, needs_review = self.ports.normalize.resolve(mention, entity_type, session=self.task_repo.session)
                 except Exception as exc:
-                    raise WorkflowStepError(f"normalize failed for {mention}: {exc}") from exc
-                cache[mention] = {
-                    "mention": mention,
-                    "candidates": [c.__dict__ for c in candidates],
-                    "needs_review": needs_review,
-                }
+                    # 单个 mention 解析失败不阻断管线：标记未解析送人工复核
+                    logger.warning("normalize failed for %r (unresolved): %s", mention, exc)
+                    cache[mention] = {
+                        "mention": mention,
+                        "candidates": [],
+                        "needs_review": True,
+                    }
+                else:
+                    cache[mention] = {
+                        "mention": mention,
+                        "candidates": [c.__dict__ for c in candidates],
+                        "needs_review": needs_review,
+                    }
             resolutions.append(dict(cache[mention]))
         return {"resolutions": resolutions}
 
