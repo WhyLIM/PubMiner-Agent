@@ -35,3 +35,4 @@ docs/adr/
 docs/workflow-summary.md
 .zcodeignore
 webui-old/
+ui.html
