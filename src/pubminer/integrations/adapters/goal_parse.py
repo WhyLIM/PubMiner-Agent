@@ -34,9 +34,21 @@ class GoalParseAdapter:
             query: str
             explanation: str = ""
 
+        class _ClarificationOption(BaseModel):
+            label: str
+            description: str = ""
+
+        class _ClarificationQuestion(BaseModel):
+            id: str
+            question: str
+            header: str = ""
+            options: list[_ClarificationOption] = []
+            multi_select: bool = False
+
         class _Clarification(BaseModel):
             needed: bool = False
             question: str | None = None
+            questions: list[_ClarificationQuestion] = []
 
         class _GoalFields(BaseModel):
             disease: str | None = None
@@ -74,6 +86,24 @@ class GoalParseAdapter:
             if value is not None:
                 result[key] = value
 
+        clarification = payload.get("clarification", {}) or {}
+        result["clarification"] = {
+            "needed": bool(clarification.get("needed")),
+            "question": clarification.get("question"),
+            "questions": [
+                {
+                    "id": q.get("id", f"q{i}"),
+                    "question": q.get("question", ""),
+                    "header": q.get("header", ""),
+                    "options": [
+                        {"label": o.get("label", ""), "description": o.get("description", "")}
+                        for o in (q.get("options") or [])
+                    ],
+                    "multi_select": bool(q.get("multi_select")),
+                }
+                for i, q in enumerate(clarification.get("questions") or [])
+            ],
+        }
         result["search_intents"] = [
             {"name": si.get("name", f"intent_{i}"), "query": si.get("query", ""),
              "explanation": si.get("explanation", "")}

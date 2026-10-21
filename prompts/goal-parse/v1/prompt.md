@@ -14,6 +14,13 @@ Rules:
   Example: colorectal cancer[MeSH] AND biomarker[tiab] AND prognosis[tiab]
   Do NOT use tags outside this list.
 - explanation: for EACH search intent, write ONE sentence in Chinese explaining what the query searches for and why, in plain language for non-specialists. Example: "检索 MeSH 主题词为胰腺癌、且标题或摘要中出现 biomarker 和预后关键词的文献"
-- clarification.needed: true ONLY when you cannot generate any useful search query (e.g. missing disease AND missing task type). If you can generate at least one useful query, set to false.
-- clarification.question: when needed=true, ONE specific question the user should answer.
+- clarification.needed: true when key information is missing or ambiguous (e.g. missing disease, unclear task type). If everything is clear, set to false and use an empty questions list.
+- clarification.questions: when needed=true, ONE question per missing/ambiguous field, following this exact schema:
+  - id: stable short id matching the field (e.g. "disease", "task", "year")
+  - question: the specific question, in Chinese, user-facing
+  - header: short Chinese group label (e.g. "研究疾病", "任务类型", "时间范围")
+  - options: 2-4 candidate choices the user can click, each {"label": "...", "description": "一句话说明影响"}. Derive candidates from the goal text when possible. For "task" use the four standard types as options. Put the most likely choice FIRST. For "year" offer common ranges (e.g. 近5年/近10年/全部).
+  - multi_select: true only when several choices may apply
+- Users can always type a free-text answer instead of picking options, so questions must be self-contained.
+- If you can generate at least one useful search query AND no key field is missing, set needed=false with empty questions.
 Return ONLY JSON with those keys.

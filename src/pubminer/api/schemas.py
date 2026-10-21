@@ -395,8 +395,15 @@ class ParseGoalResponse(BaseModel):
     missing_required_fields: list[str] = Field(default_factory=list)
 
 
+class AnswerAnswerItem(BaseModel):
+    id: str
+    selected: list[str] = Field(default_factory=list)
+    custom: str | None = None
+
+
 class AnswerRequest(BaseModel):
-    answer: str = Field(min_length=1, description="用户对澄清问题的回答")
+    answer: str = Field("", description="自由文本回答（旧形态）")
+    answers: list[AnswerAnswerItem] = Field(default_factory=list, description="dsh 式结构化回答")
 
 
 class SaveSearchIntentsRequest(BaseModel):

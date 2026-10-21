@@ -189,15 +189,65 @@
           </div>
         </div>
 
-        <!-- 追问回答输入 -->
-        <div v-if="setup.phase === 'clarify'" class="border-t border-slate-100 p-3 flex gap-2">
-          <el-input
-            v-model="setupInput"
-            placeholder="用自然语言回答（如：胰腺癌，关注预后，2020 年以来）…"
-            size="small"
-            @keyup.enter="sendClar"
-          />
-          <el-button type="primary" size="small" @click="sendClar">发送</el-button>
+        <!-- 追问回答：dsh 式问题卡片 + 自由文本输入 -->
+        <div v-if="setup.phase === 'clarify'" class="border-t border-slate-100 p-3 space-y-2">
+          <!-- 问题卡片：每题选项点选 + "其他"自定义 -->
+          <div
+            v-for="q in pendingQuestions"
+            :key="q.id"
+            class="p-2.5 rounded-lg border border-sky-100 bg-sky-50/40 space-y-2"
+          >
+            <div class="flex items-baseline gap-2">
+              <span v-if="q.header" class="text-[11px] font-semibold text-sky-800 shrink-0">{{ q.header }}</span>
+              <span class="text-xs text-slate-700">{{ q.question }}</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="opt in q.options"
+                :key="opt.label"
+                :title="opt.description"
+                :class="[
+                  'px-2.5 py-1 rounded-full text-xs border transition-colors text-left',
+                  (questionAnswers[q.id]?.selected ?? []).includes(opt.label)
+                    ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                    : 'bg-white text-slate-600 border-slate-300 hover:border-sky-400 hover:text-sky-700',
+                ]"
+                @click="toggleOption(q, opt.label)"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+            <el-input
+              :model-value="questionAnswers[q.id]?.custom ?? ''"
+              size="small"
+              placeholder="或输入自定义答案…"
+              @update:model-value="(v: string) => setCustom(q.id, v)"
+            />
+          </div>
+
+          <!-- 自由文本兜底 -->
+          <div class="flex gap-2">
+            <el-input
+              v-model="setupInput"
+              placeholder="用自然语言补充回答（如：胰腺癌，关注预后，2020 年以来）…"
+              size="small"
+              @keyup.enter="sendClar"
+            />
+            <el-button type="primary" size="small" :disabled="!setupInput.trim()" @click="sendClar">发送</el-button>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] text-slate-400">
+              {{ clarifyCountdown > 0 ? `${clarifyCountdown}s 后将自动跳过（按当前信息继续）` : '回答后点击提交，或跳过按默认参数执行' }}
+            </span>
+            <div class="flex items-center gap-2">
+              <el-button size="small" @click="skipClarify">跳过追问</el-button>
+              <el-button
+                type="primary"
+                size="small"
+                @click="submitAnswers"
+              >提交回答</el-button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -950,6 +1000,7 @@ import { ElMessage } from 'element-plus';
 import SpanHighlight from './SpanHighlight.vue';
 import AgentWorkflowView from './AgentWorkflowView.vue';
 import { agentApi, type DocumentDetail, type DocumentEvidenceEntry, type EvidenceSpanItem } from '@/api/client';
+import type { SetupQuestion } from '@/composables/useResearch';
 import { useResearch } from '@/composables/useResearch';
 
 const {
@@ -1335,9 +1386,87 @@ async function sendClar() {
   const t = setupInput.value.trim();
   if (!t) { return; }
   setupInput.value = '';
+  stopCountdown();
   await sendClarification(t);
   await nextTick();
   scrollSetupChat();
+}
+
+// ---- dsh 式问题卡片：答案收集 + 提交 + 倒计时跳过 ----
+const questionAnswers = ref<Record<string, { selected: string[]; custom: string }>>({});
+const clarifyCountdown = ref(0);
+let countdownHandle: ReturnType<typeof setInterval> | null = null;
+
+const pendingQuestions = computed<SetupQuestion[]>(() => {
+  if (setup.value?.phase !== 'clarify') { return []; }
+  const last = [...setup.value.messages].reverse().find(m => m.questions?.length);
+  return last?.questions ?? [];
+});
+
+const hasAnyAnswer = computed(() => {
+  if (setupInput.value.trim()) { return true; }
+  return Object.values(questionAnswers.value).some(a => a.selected.length || a.custom.trim());
+});
+
+function toggleOption(q: SetupQuestion, label: string) {
+  const cur = questionAnswers.value[q.id] ?? { selected: [], custom: '' };
+  if (q.multi_select) {
+    const sel = cur.selected.includes(label) ? cur.selected.filter(x => x !== label) : [...cur.selected, label];
+    questionAnswers.value[q.id] = { ...cur, selected: sel };
+  } else {
+    // 单选：再次点击取消选择
+    questionAnswers.value[q.id] = { ...cur, selected: cur.selected.includes(label) ? [] : [label] };
+  }
+}
+
+function setCustom(qid: string, text: string) {
+  const cur = questionAnswers.value[qid] ?? { selected: [], custom: '' };
+  questionAnswers.value[qid] = { ...cur, custom: text };
+}
+
+function stopCountdown() {
+  if (countdownHandle !== null) { clearInterval(countdownHandle); countdownHandle = null; }
+}
+
+// timed 语义复刻：追问显示 120s 倒计时，到时自动跳过（pending → 按当前信息继续），用户仍可回答
+watch(() => setup.value?.phase, (phase) => {
+  stopCountdown();
+  if (phase !== 'clarify') { return; }
+  clarifyCountdown.value = 120;
+  countdownHandle = setInterval(() => {
+    clarifyCountdown.value -= 1;
+    if (clarifyCountdown.value <= 0) {
+      stopCountdown();
+      skipClarify();
+    }
+  }, 1000);
+});
+
+async function submitAnswers() {
+  const s = setup.value;
+  if (!s) { return; }
+  stopCountdown();
+  // 组装可读回答：优先卡片答案，其次自由文本
+  const parts: string[] = [];
+  for (const q of pendingQuestions.value) {
+    const a = questionAnswers.value[q.id];
+    if (!a) { continue; }
+    const merged = [a.selected.join('、'), a.custom].filter(Boolean).join('；');
+    if (merged) { parts.push(`${q.question} → ${merged}`); }
+  }
+  const free = setupInput.value.trim();
+  if (free) { parts.push(free); }
+  const text = parts.length ? parts.join('\n') : '按默认参数执行';
+  setupInput.value = '';
+  questionAnswers.value = {};
+  s.messages.push({ sender: 'user', text });
+  s.phase = 'parsing';
+  try {
+    await sendClarification(text);
+  } finally {
+    await nextTick();
+    scrollSetupChat();
+  }
 }
 
 function skipClarify() {

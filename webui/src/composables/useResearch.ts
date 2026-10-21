@@ -71,9 +71,22 @@ const miningActive = ref(false);
 const workflowPanelOpen = ref(false);
 
 // ---- 研究准备（AskHuman 对话式澄清 + 检索式确认） ----
+export interface SetupQuestionOption {
+  label: string;
+  description: string;
+}
+export interface SetupQuestion {
+  id: string;
+  question: string;
+  header: string;
+  options: SetupQuestionOption[];
+  multi_select: boolean;
+}
 export interface SetupChatMessage {
   sender: 'ai' | 'user';
   text: string;
+  /** dsh 式问题卡片：非空时渲染为可交互问题卡 */
+  questions?: SetupQuestion[];
 }
 export interface SetupState {
   open: boolean;
@@ -559,18 +572,31 @@ async function applyParse() {
     s.fields = res.fields ?? {};
     s.intents = res.search_intents ?? [];
     s.messages.push({ sender: 'ai', text: buildGoalSummary(s.fields, s.intents) });
-    // 追问触发：LLM 判定需要澄清，或存在缺失的必填字段（确定性信号）
+    // 追问触发：LLM 结构化问题（dsh 式卡片），或缺失必填字段（确定性信号 → 生成结构化卡片）
     const clarification = res.clarification ?? {};
     const missing = res.missing_required_fields ?? [];
-    const llmWantsClarify = clarification.needed && clarification.question;
+    const llmQuestions: SetupQuestion[] = ((clarification.questions ?? []) as SetupQuestion[]).filter(
+      q => q.id && q.question,
+    );
     const missingFields = missing.filter(f => !(f in s.fields));
-    if ((llmWantsClarify || missingFields.length > 0) && s.rounds < MAX_CLARIFY_ROUNDS) {
+    if ((llmQuestions.length || (clarification.needed && clarification.question) || missingFields.length > 0) && s.rounds < MAX_CLARIFY_ROUNDS) {
       s.rounds += 1;
       s.phase = 'clarify';
-      const question = llmWantsClarify
-        ? String(clarification.question)
-        : '请补充以下信息，以便生成有效的检索式：\n- ' + missingFields.map(f => FIELD_LABELS[f] ?? f).join('\n- ');
-      s.messages.push({ sender: 'ai', text: question });
+      let questions: SetupQuestion[] = llmQuestions;
+      if (!questions.length && missingFields.length) {
+        questions = missingFields.map(f => ({
+          id: f,
+          question: `请提供${FIELD_LABELS[f] ?? f}`,
+          header: FIELD_LABELS[f] ?? f,
+          options: [],
+          multi_select: false,
+        }));
+      }
+      if (questions.length) {
+        s.messages.push({ sender: 'ai', text: '有几个信息需要确认：', questions });
+      } else if (clarification.question) {
+        s.messages.push({ sender: 'ai', text: String(clarification.question) });
+      }
     } else {
       s.phase = 'ready';
       if (s.rounds >= MAX_CLARIFY_ROUNDS) {

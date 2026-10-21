@@ -767,11 +767,26 @@ def create_app(container: Container) -> FastAPI:
 
     @app.post("/api/v1/agent/sessions/{session_id}/answer")
     def answer_clarification(session_id: str, body: schemas.AnswerRequest):
-        """用户回答澄清问题：存储回答。前端收到 200 后重新调 parse-goal。"""
+        """用户回答澄清问题：存储回答。前端收到 200 后重新调 parse-goal。
+
+        支持两种形态（兼容）：旧版 {"answer": "自由文本"}；
+        dsh 式结构化 {"answers": [{"id", "selected": [...], "custom"?}]}。
+        """
         sid = _parse_uuid(session_id, "session")
         with session_scope(container.session_factory) as session:
             service = container.session_service(session)
-            service.post_message(sid, "user", body.answer, kind="clarification_answer")
+            answer_text = body.answer
+            if not answer_text and body.answers:
+                parts = []
+                for a in body.answers:
+                    chosen = "、".join(a.selected) if a.selected else ""
+                    custom = a.custom or ""
+                    merged = f"{chosen}{'；' if chosen and custom else ''}{custom}".strip()
+                    parts.append(f"{a.id}: {merged or '（未答）'}")
+                answer_text = "\n".join(parts)
+            if not answer_text:
+                raise HTTPException(422, "answer is required")
+            service.post_message(sid, "user", answer_text, kind="clarification_answer")
             # 触发前端重新调 parse-goal（后端只存消息）
             return {"ok": True, "hint": "call parse-goal again to re-parse with new context"}
 
