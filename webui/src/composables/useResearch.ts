@@ -87,6 +87,8 @@ export interface SetupChatMessage {
   text: string;
   /** dsh 式问题卡片：非空时渲染为可交互问题卡 */
   questions?: SetupQuestion[];
+  /** 检索式审批：非空时渲染为内联审批卡片（引用 setup.intents 同一数组） */
+  intents?: Array<{ name: string; query: string; explanation: string; enabled: boolean }>;
 }
 export interface SetupState {
   open: boolean;
@@ -571,7 +573,12 @@ async function applyParse() {
     const res = await agentApi.parseGoal(sessionId.value);
     s.fields = res.fields ?? {};
     s.intents = (res.search_intents ?? []).map(si => ({ ...si, enabled: true }));
-    s.messages.push({ sender: 'ai', text: buildGoalSummary(s.fields, s.intents) });
+    // 检索式附着在解析消息上：对话流内联渲染审批卡片（引用同一数组，编辑即生效）
+    s.messages.push({
+      sender: 'ai',
+      text: buildGoalSummary(s.fields, s.intents),
+      intents: s.intents,
+    });
     // 追问触发：LLM 结构化问题（dsh 式卡片），或缺失必填字段（确定性信号 → 生成结构化卡片）
     const clarification = res.clarification ?? {};
     const missing = res.missing_required_fields ?? [];

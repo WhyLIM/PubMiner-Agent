@@ -73,7 +73,7 @@
       </div>
     </div>
 
-    <!-- 研究目标确认（AskHuman 对话式澄清 + 检索式预览） -->
+    <!-- 研究目标确认：对话式界面（问题卡片/检索式审批/领域选择内联对话流） -->
     <div v-if="setup" class="bg-white rounded-lg border border-sky-200 shadow-xs overflow-hidden">
       <div class="px-4 py-2.5 flex items-center justify-between bg-sky-50/70 border-b border-sky-100">
         <div class="flex items-center gap-2">
@@ -84,176 +84,179 @@
         <el-button size="small" text :disabled="setup.phase === 'running'" @click="closeSetup">取消</el-button>
       </div>
 
-      <div class="flex flex-col h-[400px]">
-        <!-- 对话区 -->
+      <div class="flex flex-col h-[480px]">
+        <!-- 对话流：所有交互内联在消息中 -->
         <div ref="setupChatRef" class="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
-          <div
-            v-for="(m, i) in setup.messages"
-            :key="i"
-            :class="[
-              'p-3 rounded-lg leading-relaxed whitespace-pre-line',
-              m.sender === 'user'
-                ? 'ml-10 bg-sky-600 text-white'
-                : 'mr-10 bg-slate-50 border border-slate-200 text-slate-800'
-            ]"
-          >{{ m.text }}</div>
-          <div v-if="setup.phase === 'parsing'" class="text-slate-400 flex items-center gap-2 mr-10">
+          <template v-for="(m, i) in setup.messages" :key="i">
+            <!-- 消息气泡 -->
+            <div
+              v-if="m.text"
+              :class="[
+                'p-3 rounded-lg leading-relaxed whitespace-pre-line',
+                m.sender === 'user'
+                  ? 'ml-10 bg-sky-600 text-white'
+                  : 'mr-6 bg-slate-50 border border-slate-200 text-slate-800'
+              ]"
+            >{{ m.text }}</div>
+
+            <!-- dsh 式问题卡片（内联在追问消息下） -->
+            <template v-if="m.questions?.length">
+              <div
+                v-for="q in m.questions"
+                :key="q.id"
+                class="ml-6 p-2.5 rounded-lg border border-sky-100 bg-sky-50/40 space-y-2"
+              >
+                <div class="flex items-baseline gap-2">
+                  <span v-if="q.header" class="text-[11px] font-semibold text-sky-800 shrink-0">{{ q.header }}</span>
+                  <span class="text-xs text-slate-700">{{ q.question }}</span>
+                </div>
+                <div v-if="q.options.length" class="flex flex-wrap gap-1.5">
+                  <button
+                    v-for="opt in q.options"
+                    :key="opt.label"
+                    :title="opt.description"
+                    :class="[
+                      'px-2.5 py-1 rounded-full text-xs border transition-colors text-left',
+                      (questionAnswers[q.id]?.selected ?? []).includes(opt.label)
+                        ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                        : 'bg-white text-slate-600 border-slate-300 hover:border-sky-400 hover:text-sky-700',
+                    ]"
+                    @click="toggleOption(q, opt.label)"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </div>
+                <el-input
+                  :model-value="questionAnswers[q.id]?.custom ?? ''"
+                  size="small"
+                  placeholder="或输入自定义答案…"
+                  @update:model-value="(v: string) => setCustom(q.id, v)"
+                />
+              </div>
+              <!-- 追问动作（仅最后一条追问消息 + clarify 阶段） -->
+              <div
+                v-if="i === lastQuestionMsgIdx && setup.phase === 'clarify'"
+                class="ml-6 flex items-center justify-between gap-2"
+              >
+                <span class="text-[11px] text-slate-400">
+                  {{ clarifyCountdown > 0 ? `${clarifyCountdown}s 后将自动跳过（按当前信息继续）` : '可点选选项或自由输入' }}
+                </span>
+                <div class="flex items-center gap-2">
+                  <el-button size="small" @click="skipClarify">跳过追问</el-button>
+                  <el-button type="primary" size="small" :disabled="!hasAnyAnswer" @click="submitAnswers">提交回答</el-button>
+                </div>
+              </div>
+            </template>
+
+            <!-- 检索式审批 + 领域选择 + 开始挖掘（内联在最后一条解析消息下） -->
+            <template v-if="m.intents && i === lastParseMsgIdx && setup.phase !== 'running' && setup.phase !== 'parsing'">
+              <div class="ml-6 mr-2 p-2.5 rounded-lg border border-slate-200 bg-white space-y-2">
+                <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                  检索式审批（勾选启用，可直接编辑）
+                </div>
+                <div v-if="!setup.intents.length" class="text-[11px] text-slate-400">
+                  尚未生成检索式；补充信息后会自动重新生成，也可按默认参数直接执行。
+                </div>
+                <div v-for="(si, siIdx) in setup.intents" :key="siIdx" class="space-y-0.5">
+                  <div class="flex items-center gap-2">
+                    <el-checkbox
+                      v-model="si.enabled"
+                      size="small"
+                      class="shrink-0"
+                      :title="si.enabled ? '参与本次挖掘；取消则跳过该检索式' : '已禁用，不参与本次挖掘'"
+                    />
+                    <span class="text-[11px] text-slate-500 w-20 shrink-0 truncate" :title="si.name">{{ si.name }}</span>
+                    <el-input v-model="si.query" size="small" class="font-mono" :disabled="!si.enabled" />
+                  </div>
+                  <div v-if="si.explanation" class="text-[11px] text-slate-400 pl-[6.5rem]">{{ si.explanation }}</div>
+                </div>
+
+                <div class="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 text-[11px]">
+                    <span class="font-semibold text-slate-500 uppercase tracking-wide">研究领域</span>
+                    <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
+                      {{ setup.domainName || '默认（按任务自动匹配）' }}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <el-button size="small" @click="domainTab = domainTab === 'paste' ? '' : 'paste'">粘贴 JSON</el-button>
+                    <el-button size="small" @click="domainTab = domainTab === 'generate' ? '' : 'generate'">AI 生成</el-button>
+                  </div>
+                </div>
+
+                <div v-if="domainTab" class="space-y-2">
+                  <el-input
+                    v-if="domainTab === 'generate'"
+                    v-model="domainDescription"
+                    size="small"
+                    placeholder="描述研究领域（如：阿尔茨海默病脑脊液蛋白标志物，关注预后）…"
+                  />
+                  <el-input
+                    v-else
+                    v-model="domainJsonText"
+                    type="textarea"
+                    :rows="6"
+                    placeholder="粘贴领域定义 JSON。粘贴后点解析校准，AI 会补齐缺失字段并规范化格式。"
+                  />
+                  <div class="flex items-center gap-2">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      :loading="domainBusy"
+                      @click="domainTab === 'generate' ? runGenerate() : runCalibrate()"
+                    >
+                      {{ domainTab === 'generate' ? 'AI 生成领域' : '解析校准' }}
+                    </el-button>
+                  </div>
+                </div>
+
+                <div v-if="domainPreview" class="space-y-2">
+                  <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                    领域预览（name: {{ domainPreview.name }}）— 可编辑后保存
+                  </div>
+                  <el-input v-model="domainPreviewText" type="textarea" :rows="8" class="font-mono" />
+                  <template v-if="domainPreviewFields">
+                    <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                      抽取字段预览（{{ domainPreviewFields.name }}）
+                    </div>
+                    <el-input v-model="domainPreviewFieldsText" type="textarea" :rows="5" class="font-mono" />
+                  </template>
+                  <div class="flex items-center gap-2">
+                    <el-button size="small" type="success" :loading="domainBusy" @click="saveDomain">保存并使用此领域</el-button>
+                    <el-button size="small" text @click="domainPreview = null">放弃</el-button>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-end pt-1">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :disabled="setup.phase === 'clarify'"
+                    :title="setup.phase === 'clarify' ? '请先回答澄清问题或跳过追问' : '批准检索式并开始挖掘'"
+                    @click="runSetup"
+                  >
+                    批准并开始挖掘
+                  </el-button>
+                </div>
+              </div>
+            </template>
+          </template>
+
+          <div v-if="setup.phase === 'parsing'" class="text-slate-400 flex items-center gap-2 mr-6">
             <el-icon class="is-loading"><Loading /></el-icon>
             <span>解析中…</span>
           </div>
         </div>
 
-        <!-- 研究领域（可选）：跟随解析任务 / 粘贴 JSON / AI 生成 -->
-        <div v-if="setup.phase !== 'running'" class="border-t border-slate-100 p-3 space-y-2">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 text-[11px]">
-              <span class="font-semibold text-slate-500 uppercase tracking-wide">研究领域</span>
-              <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
-                {{ setup.domainName || '默认（按任务自动匹配）' }}
-              </span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <el-button size="small" @click="domainTab = domainTab === 'paste' ? '' : 'paste'">粘贴 JSON</el-button>
-              <el-button size="small" @click="domainTab = domainTab === 'generate' ? '' : 'generate'">AI 生成</el-button>
-            </div>
-          </div>
-
-          <div v-if="domainTab" class="space-y-2">
-            <el-input
-              v-if="domainTab === 'generate'"
-              v-model="domainDescription"
-              size="small"
-              placeholder="描述研究领域（如：阿尔茨海默病脑脊液蛋白标志物，关注预后）…"
-            />
-            <el-input
-              v-else
-              v-model="domainJsonText"
-              type="textarea"
-              :rows="8"
-              placeholder='粘贴领域定义 JSON（可从现有 schema 修改）。粘贴后点"解析校准"，AI 会补齐缺失字段并规范化格式。'
-            />
-            <div class="flex items-center gap-2">
-              <el-button
-                size="small"
-                type="primary"
-                :loading="domainBusy"
-                @click="domainTab === 'generate' ? runGenerate() : runCalibrate()"
-              >
-                {{ domainTab === 'generate' ? 'AI 生成领域' : '解析校准' }}
-              </el-button>
-              <span class="text-[11px] text-slate-400">
-                {{ domainTab === 'generate' ? '根据描述生成完整领域定义' : 'AI 校准格式并补齐必填字段' }}
-              </span>
-            </div>
-          </div>
-
-          <div v-if="domainPreview" class="space-y-2">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-              领域预览（name: {{ domainPreview.name }}）— 可编辑后保存
-            </div>
-            <el-input v-model="domainPreviewText" type="textarea" :rows="10" class="font-mono" />
-            <template v-if="domainPreviewFields">
-              <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                抽取字段预览（{{ domainPreviewFields.name }}）— 可编辑后一并保存
-              </div>
-              <el-input v-model="domainPreviewFieldsText" type="textarea" :rows="6" class="font-mono" />
-            </template>
-            <div class="flex items-center gap-2">
-              <el-button size="small" type="success" :loading="domainBusy" @click="saveDomain">保存并使用此领域</el-button>
-              <el-button size="small" text @click="domainPreview = null">放弃</el-button>
-              <span class="text-[11px] text-slate-400">保存后全局可用（schemas/domains/），本次挖掘自动使用</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 检索式预览 / 编辑 + 主操作（无检索式时也可跳过/默认执行） -->
-        <div v-if="setup.phase !== 'running' && setup.phase !== 'parsing'" class="border-t border-slate-100 p-3 space-y-2">
-          <div v-if="setup.intents.length" class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">检索式（可直接编辑）</div>
-          <div v-else class="text-[11px] text-slate-400">尚未生成检索式；补充信息后会自动重新生成，也可按默认参数直接执行。</div>
-          <div v-for="(si, i) in setup.intents" :key="i" class="space-y-0.5">
-            <div class="flex items-center gap-2">
-              <el-checkbox
-                v-model="si.enabled"
-                size="small"
-                class="shrink-0"
-                :title="si.enabled ? '参与本次挖掘；取消则跳过该检索式' : '已禁用，不参与本次挖掘'"
-              />
-              <span class="text-[11px] text-slate-500 w-20 shrink-0 truncate" :title="si.name">{{ si.name }}</span>
-              <el-input v-model="si.query" size="small" class="font-mono" :disabled="!si.enabled" />
-            </div>
-            <div v-if="si.explanation" class="text-[11px] text-slate-400 pl-[6.5rem]">{{ si.explanation }}</div>
-          </div>
-          <div class="flex items-center justify-between pt-1 gap-2">
-            <span v-if="setup.phase === 'clarify'" class="text-[11px] text-amber-600">
-              还有待确认的信息；可直接回答上方问题，或跳过追问。
-            </span>
-            <span v-else class="text-[11px] text-slate-400">确认无误即可开始挖掘。</span>
-            <div class="ml-auto flex items-center gap-2 shrink-0">
-              <el-button v-if="setup.phase === 'clarify'" size="small" @click="skipClarify">跳过追问</el-button>
-              <el-button type="primary" size="small" @click="runSetup">开始挖掘</el-button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 追问回答：dsh 式问题卡片 + 自由文本输入 -->
-        <div v-if="setup.phase === 'clarify'" class="border-t border-slate-100 p-3 space-y-2">
-          <!-- 问题卡片：每题选项点选 + "其他"自定义 -->
-          <div
-            v-for="q in pendingQuestions"
-            :key="q.id"
-            class="p-2.5 rounded-lg border border-sky-100 bg-sky-50/40 space-y-2"
-          >
-            <div class="flex items-baseline gap-2">
-              <span v-if="q.header" class="text-[11px] font-semibold text-sky-800 shrink-0">{{ q.header }}</span>
-              <span class="text-xs text-slate-700">{{ q.question }}</span>
-            </div>
-            <div class="flex flex-wrap gap-1.5">
-              <button
-                v-for="opt in q.options"
-                :key="opt.label"
-                :title="opt.description"
-                :class="[
-                  'px-2.5 py-1 rounded-full text-xs border transition-colors text-left',
-                  (questionAnswers[q.id]?.selected ?? []).includes(opt.label)
-                    ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
-                    : 'bg-white text-slate-600 border-slate-300 hover:border-sky-400 hover:text-sky-700',
-                ]"
-                @click="toggleOption(q, opt.label)"
-              >
-                {{ opt.label }}
-              </button>
-            </div>
-            <el-input
-              :model-value="questionAnswers[q.id]?.custom ?? ''"
-              size="small"
-              placeholder="或输入自定义答案…"
-              @update:model-value="(v: string) => setCustom(q.id, v)"
-            />
-          </div>
-
-          <!-- 自由文本兜底 -->
-          <div class="flex gap-2">
-            <el-input
-              v-model="setupInput"
-              placeholder="用自然语言补充回答（如：胰腺癌，关注预后，2020 年以来）…"
-              size="small"
-              @keyup.enter="sendClar"
-            />
-            <el-button type="primary" size="small" :disabled="!setupInput.trim()" @click="sendClar">发送</el-button>
-          </div>
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-[11px] text-slate-400">
-              {{ clarifyCountdown > 0 ? `${clarifyCountdown}s 后将自动跳过（按当前信息继续）` : '回答后点击提交，或跳过按默认参数执行' }}
-            </span>
-            <div class="flex items-center gap-2">
-              <el-button size="small" @click="skipClarify">跳过追问</el-button>
-              <el-button
-                type="primary"
-                size="small"
-                @click="submitAnswers"
-              >提交回答</el-button>
-            </div>
-          </div>
+        <!-- 自由文本兜底输入（澄清阶段） -->
+        <div v-if="setup.phase === 'clarify'" class="border-t border-slate-100 p-3 flex gap-2">
+          <el-input
+            v-model="setupInput"
+            placeholder="用自然语言回答（如：胰腺癌，关注预后，2020 年以来）…"
+            size="small"
+            @keyup.enter="sendClar"
+          />
+          <el-button type="primary" size="small" :disabled="!setupInput.trim()" @click="sendClar">发送</el-button>
         </div>
       </div>
     </div>
@@ -1407,6 +1410,21 @@ const pendingQuestions = computed<SetupQuestion[]>(() => {
   if (setup.value?.phase !== 'clarify') { return []; }
   const last = [...setup.value.messages].reverse().find(m => m.questions?.length);
   return last?.questions ?? [];
+});
+/** 最后一条追问消息 / 最后一条解析消息（内联交互只挂在这两处） */
+const lastQuestionMsgIdx = computed(() => {
+  const msgs = setup.value?.messages ?? [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].questions?.length) { return i; }
+  }
+  return -1;
+});
+const lastParseMsgIdx = computed(() => {
+  const msgs = setup.value?.messages ?? [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].intents) { return i; }
+  }
+  return -1;
 });
 
 const hasAnyAnswer = computed(() => {
