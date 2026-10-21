@@ -29,7 +29,12 @@ class CachedExtractPort:
         self.cache_hits = 0
 
     def extract(self, hydrated, *, session=None):
+        # state 反序列化后 version 可能是 dict（HydratedDocument 非 pydantic 模型），统一转模型
+        from pubminer.domain.documents import DocumentVersion
+
         version = hydrated.version
+        if isinstance(version, dict):
+            version = DocumentVersion.model_validate(version)
         key = _sha(f"{self.prompt_version}|{version.text_hash}")
         if session is not None:
             from pubminer.infrastructure.db.repositories.llm_cache import ResultCacheRepository

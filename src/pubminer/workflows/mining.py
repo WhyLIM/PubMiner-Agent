@@ -174,6 +174,8 @@ class MiningWorkflow:
             self.task_repo.update_status(task.id, _STATUS_BY_STEP.get(step_name, _STATUS_BY_STEP["AGGREGATE"]))
             try:
                 output = self._run_step(step_name, state, task)
+                # 每步提交：缩短 SQLite 写锁窗口，断点续跑不丢失已完成步骤
+                self.task_repo.session.commit()
             except WorkflowFatalError as exc:
                 self.task_repo.fail_step(task.id, index, str(exc), retryable=False)
                 self.task_repo.update_status(task.id, TaskStatus.FAILED)

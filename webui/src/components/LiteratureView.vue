@@ -138,9 +138,6 @@
                 v-if="i === lastQuestionMsgIdx && setup.phase === 'clarify'"
                 class="mr-10 flex items-center justify-between gap-2"
               >
-                <span class="text-[11px] text-slate-400">
-                  {{ clarifyCountdown > 0 ? `${clarifyCountdown}s 后将自动跳过（按当前信息继续）` : '可点选选项或自由输入' }}
-                </span>
                 <div class="flex items-center gap-2">
                   <el-button size="small" @click="skipClarify">跳过追问</el-button>
                   <el-button type="primary" size="small" :disabled="!hasAnyAnswer" @click="submitAnswers">提交回答</el-button>
@@ -158,26 +155,27 @@
                   尚未生成检索式；可勾选下方「其它」自行补充，或按默认参数直接执行。
                 </div>
                 <div v-for="(si, siIdx) in setup.intents" :key="siIdx" class="space-y-0.5">
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-start gap-2">
                     <el-checkbox
                       v-model="si.enabled"
                       size="small"
-                      class="shrink-0"
+                      class="shrink-0 !h-6"
                       :title="si.enabled ? '参与本次挖掘；取消则跳过该检索式' : '已禁用，不参与本次挖掘'"
                     />
-                    <span class="text-[11px] text-slate-500 w-20 shrink-0 truncate" :title="si.name">{{ si.name }}</span>
-                    <el-input v-model="si.query" size="small" class="font-mono" :disabled="!si.enabled" />
+                    <div class="min-w-0 flex-1">
+                      <div class="text-[11px] text-slate-500">{{ si.name }}</div>
+                      <el-input v-model="si.query" size="small" class="font-mono mt-0.5" :disabled="!si.enabled" />
+                      <div v-if="si.explanation" class="text-[11px] text-slate-400 mt-0.5">{{ si.explanation }}</div>
+                    </div>
                   </div>
-                  <div v-if="si.explanation" class="text-[11px] text-slate-400 pl-[6.5rem]">{{ si.explanation }}</div>
                 </div>
-                <!-- 第四项：其它，请补充 -->
+                <!-- 第四项：其它，请补充（免勾选直接输入） -->
                 <div class="flex items-center gap-2 pt-1 border-t border-slate-100">
-                  <el-checkbox v-model="customQuery.checked" size="small" label="其它，请补充" class="shrink-0" />
+                  <span class="text-xs text-slate-600 shrink-0">其它，请补充</span>
                   <el-input
-                    v-model="customQuery.text"
+                    v-model="customQuery"
                     size="small"
                     class="font-mono"
-                    :disabled="!customQuery.checked"
                     placeholder="输入自定义检索式（PubMed 语法）…"
                   />
                 </div>
@@ -1411,16 +1409,13 @@ async function sendClar() {
   const t = setupInput.value.trim();
   if (!t) { return; }
   setupInput.value = '';
-  stopCountdown();
   await sendClarification(t);
   await nextTick();
   scrollSetupChat();
 }
 
-// ---- dsh 式问题卡片：答案收集 + 提交 + 倒计时跳过 ----
+// ---- dsh 式问题卡片：答案收集与提交 ----
 const questionAnswers = ref<Record<string, { selected: string[]; custom: string }>>({});
-const clarifyCountdown = ref(0);
-let countdownHandle: ReturnType<typeof setInterval> | null = null;
 
 const pendingQuestions = computed<SetupQuestion[]>(() => {
   if (setup.value?.phase !== 'clarify') { return []; }
@@ -1464,28 +1459,9 @@ function setCustom(qid: string, text: string) {
   questionAnswers.value[qid] = { ...cur, custom: text };
 }
 
-function stopCountdown() {
-  if (countdownHandle !== null) { clearInterval(countdownHandle); countdownHandle = null; }
-}
-
-// timed 语义复刻：追问显示 120s 倒计时，到时自动跳过（pending → 按当前信息继续），用户仍可回答
-watch(() => setup.value?.phase, (phase) => {
-  stopCountdown();
-  if (phase !== 'clarify') { return; }
-  clarifyCountdown.value = 120;
-  countdownHandle = setInterval(() => {
-    clarifyCountdown.value -= 1;
-    if (clarifyCountdown.value <= 0) {
-      stopCountdown();
-      skipClarify();
-    }
-  }, 1000);
-});
-
 async function submitAnswers() {
   const s = setup.value;
   if (!s) { return; }
-  stopCountdown();
   // 组装可读回答：优先卡片答案，其次自由文本
   const parts: string[] = [];
   for (const q of pendingQuestions.value) {
@@ -1512,7 +1488,6 @@ async function submitAnswers() {
 function skipClarify() {
   if (!setup.value || setup.value.phase !== 'clarify') { return; }
   // 跳过追问 → 进入检索式确认（检索式可能为空，使用默认参数执行）
-  stopCountdown();
   setup.value.rounds = 99;
   setup.value.phase = 'queries';
   void nextTick(scrollSetupChat);

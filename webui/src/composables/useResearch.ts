@@ -573,7 +573,7 @@ async function applyParse() {
   try {
     const res = await agentApi.parseGoal(sessionId.value);
     s.fields = res.fields ?? {};
-    s.intents = (res.search_intents ?? []).map(si => ({ ...si, enabled: true }));
+    s.intents = (res.search_intents ?? []).map(si => ({ ...si, enabled: false }));
     const summary = buildGoalSummary(s.fields, s.intents);
     // 追问触发：LLM 结构化问题（dsh 式卡片），或缺失必填字段（确定性信号 → 生成结构化卡片）
     const clarification = res.clarification ?? {};
@@ -674,24 +674,24 @@ async function confirmAndRun(): Promise<void> {
   }
 }
 
-/** 检索式审批的「其它，请补充」项（confirmQueries 时并入 intents） */
-const customQuery = ref({ checked: false, text: "" });
+/** 检索式审批的「其它，请补充」自定义检索式 */
+const customQuery = ref("");
 
 /** 检索式确认：并入自定义检索式 → 进入研究领域选择 */
 function confirmQueries() {
   const s = setup.value;
   if (!s || s.phase !== "queries") return;
-  if (customQuery.value.checked && customQuery.value.text.trim()) {
+  if (customQuery.value.trim()) {
     s.intents.push({
       name: "custom",
-      query: customQuery.value.text.trim(),
+      query: customQuery.value.trim(),
       explanation: "用户自定义检索式",
       enabled: true,
     });
-    customQuery.value = { checked: false, text: "" };
+    customQuery.value = "";
   }
   if (!s.intents.some(i => i.enabled)) {
-    ElMessage.warning("请至少勾选一条检索式（或用「其它」补充）");
+    ElMessage.warning("请至少启用一条检索式，或在「其它」中补充自定义检索式");
     return;
   }
   s.phase = "domain";

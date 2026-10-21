@@ -20,12 +20,18 @@ metadata = Base.metadata
 
 
 def create_engine_from_url(url: str, *, echo: bool = False) -> Engine:
-    """创建 engine；SQLite 打开外键约束。"""
-    engine = sa_create_engine(url, echo=echo, future=True)
+    """创建 engine；SQLite 打开外键约束 + busy_timeout。
+
+    busy_timeout 让管线运行期间的短写冲突排队而非立即报 database is locked。
+    """
+    engine = sa_create_engine(
+        url, echo=echo, future=True,
+        connect_args={"timeout": 15} if url.startswith("sqlite") else {},
+    )
 
     if url.startswith("sqlite"):
         @event.listens_for(engine, "connect")
-        def _enable_fk(dbapi_connection, _connection_record):  # noqa: ANN001
+        def _sqlite_pragmas(dbapi_connection, _connection_record):  # noqa: ANN001
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
