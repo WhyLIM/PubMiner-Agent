@@ -8,6 +8,7 @@
  * （3s 间隔拉取 task 步骤状态 + 事件流），直至终态后刷新全部数据。
  */
 import { computed, ref } from 'vue';
+import { ElMessage } from 'element-plus';
 import {
   agentApi,
   type ClaimItem,
@@ -92,8 +93,8 @@ export interface SetupChatMessage {
 }
 export interface SetupState {
   open: boolean;
-  /** parsing: LLM 解析中 | clarify: 等待用户回答追问 | ready: 可确认开跑 | running: 已启动 */
-  phase: 'parsing' | 'clarify' | 'ready' | 'running';
+  /** parsing: LLM 解析中 | clarify: 等待回答追问 | queries: 确认检索式 | domain: 选择研究领域 | running: 已启动 */
+  phase: 'parsing' | 'clarify' | 'queries' | 'domain' | 'running';
   goal: string;
   messages: SetupChatMessage[];
   fields: Record<string, unknown>;
@@ -573,12 +574,7 @@ async function applyParse() {
     const res = await agentApi.parseGoal(sessionId.value);
     s.fields = res.fields ?? {};
     s.intents = (res.search_intents ?? []).map(si => ({ ...si, enabled: true }));
-    // 检索式附着在解析消息上：对话流内联渲染审批卡片（引用同一数组，编辑即生效）
-    s.messages.push({
-      sender: 'ai',
-      text: buildGoalSummary(s.fields, s.intents),
-      intents: s.intents,
-    });
+    const summary = buildGoalSummary(s.fields, s.intents);
     // 追问触发：LLM 结构化问题（dsh 式卡片），或缺失必填字段（确定性信号 → 生成结构化卡片）
     const clarification = res.clarification ?? {};
     const missing = res.missing_required_fields ?? [];
@@ -586,9 +582,14 @@ async function applyParse() {
       q => q.id && q.question,
     );
     const missingFields = missing.filter(f => !(f in s.fields));
-    if ((llmQuestions.length || (clarification.needed && clarification.question) || missingFields.length > 0) && s.rounds < MAX_CLARIFY_ROUNDS) {
+    const needsClarify = (llmQuestions.length || (clarification.needed && clarification.question) || missingFields.length > 0)
+      && s.rounds < MAX_CLARIFY_ROUNDS;
+
+    if (needsClarify) {
+      // 第一问：澄清问题卡片（检索式审批在其后进行）
       s.rounds += 1;
       s.phase = 'clarify';
+      s.messages.push({ sender: 'ai', text: summary, intents: s.intents });
       let questions: SetupQuestion[] = llmQuestions;
       if (!questions.length && missingFields.length) {
         questions = missingFields.map(f => ({
@@ -600,19 +601,25 @@ async function applyParse() {
         }));
       }
       if (questions.length) {
-        s.messages.push({ sender: 'ai', text: '有几个信息需要确认：', questions });
+        s.messages.push({ sender: 'ai', text: '有几个信息需要确认（可点选选项或输入自定义答案）：', questions });
       } else if (clarification.question) {
         s.messages.push({ sender: 'ai', text: String(clarification.question) });
       }
     } else {
-      s.phase = 'ready';
+      // 第二问：检索式审批
+      s.phase = 'queries';
       if (s.rounds >= MAX_CLARIFY_ROUNDS) {
         s.messages.push({ sender: 'ai', text: '已达追问上限，将按当前解析结果执行。' });
       }
+      s.messages.push({
+        sender: 'ai',
+        text: buildGoalSummary(s.fields, s.intents),
+        intents: s.intents,
+      });
     }
   } catch {
     // LLM 不可用：不阻断流程，走默认参数
-    s.phase = 'ready';
+    s.phase = 'queries';
     s.messages.push({ sender: 'ai', text: '目标解析服务暂不可用（未配置 LLM 或服务异常）。可直接用默认参数开始挖掘，或检查 .env 中的 LLM 配置后重试。' });
   }
 }
@@ -660,11 +667,38 @@ async function confirmAndRun(): Promise<void> {
     setup.value = null;
   } catch (err) {
     error.value = describe(err);
-    s.phase = 'ready';
+    s.phase = 'domain';
     throw err;
   } finally {
     loading.value = false;
   }
+}
+
+/** 检索式审批的「其它，请补充」项（confirmQueries 时并入 intents） */
+const customQuery = ref({ checked: false, text: "" });
+
+/** 检索式确认：并入自定义检索式 → 进入研究领域选择 */
+function confirmQueries() {
+  const s = setup.value;
+  if (!s || s.phase !== "queries") return;
+  if (customQuery.value.checked && customQuery.value.text.trim()) {
+    s.intents.push({
+      name: "custom",
+      query: customQuery.value.text.trim(),
+      explanation: "用户自定义检索式",
+      enabled: true,
+    });
+    customQuery.value = { checked: false, text: "" };
+  }
+  if (!s.intents.some(i => i.enabled)) {
+    ElMessage.warning("请至少勾选一条检索式（或用「其它」补充）");
+    return;
+  }
+  s.phase = "domain";
+  s.messages.push({
+    sender: "ai",
+    text: "好的，检索式已确认。接下来请选择研究领域（可直接使用默认）：",
+  });
 }
 
 function closeSetup() {
@@ -702,12 +736,12 @@ export function useResearch() {
     domains, graphCategories,
     papers, graphNodes, graphLinks, statCards, claimVersions,
     runningTaskId, taskStatus, taskSteps, miningActive, workflowPanelOpen,
-    setup,
+    setup, customQuery,
     init, selectClaim, submitReviewDecision,
     refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
     refreshDocuments, refreshSession, refreshCoverage, refreshAll,
     sessions, switchSession, refreshSessions, deleteSession, clearActiveSession,
     startPolling, runAndWait, clearError,
-    startGoalSetup, sendClarification, confirmAndRun, closeSetup,
+    startGoalSetup, sendClarification, confirmQueries, confirmAndRun, closeSetup,
   };
 }

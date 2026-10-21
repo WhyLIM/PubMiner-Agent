@@ -92,10 +92,10 @@
             <div
               v-if="m.text"
               :class="[
-                'p-3 rounded-lg leading-relaxed whitespace-pre-line',
+                'leading-relaxed whitespace-pre-line',
                 m.sender === 'user'
-                  ? 'ml-10 bg-sky-600 text-white'
-                  : 'mr-6 bg-slate-50 border border-slate-200 text-slate-800'
+                  ? 'ml-16 p-3 rounded-lg bg-sky-600 text-white max-w-[85%]'
+                  : 'mr-10 text-slate-800'
               ]"
             >{{ m.text }}</div>
 
@@ -104,7 +104,7 @@
               <div
                 v-for="q in m.questions"
                 :key="q.id"
-                class="ml-6 p-2.5 rounded-lg border border-sky-100 bg-sky-50/40 space-y-2"
+                class="mr-10 p-2.5 rounded-lg border border-sky-100 bg-sky-50/40 space-y-2"
               >
                 <div class="flex items-baseline gap-2">
                   <span v-if="q.header" class="text-[11px] font-semibold text-sky-800 shrink-0">{{ q.header }}</span>
@@ -136,7 +136,7 @@
               <!-- 追问动作（仅最后一条追问消息 + clarify 阶段） -->
               <div
                 v-if="i === lastQuestionMsgIdx && setup.phase === 'clarify'"
-                class="ml-6 flex items-center justify-between gap-2"
+                class="mr-10 flex items-center justify-between gap-2"
               >
                 <span class="text-[11px] text-slate-400">
                   {{ clarifyCountdown > 0 ? `${clarifyCountdown}s 后将自动跳过（按当前信息继续）` : '可点选选项或自由输入' }}
@@ -148,14 +148,14 @@
               </div>
             </template>
 
-            <!-- 检索式审批 + 领域选择 + 开始挖掘（内联在最后一条解析消息下） -->
-            <template v-if="m.intents && i === lastParseMsgIdx && setup.phase !== 'running' && setup.phase !== 'parsing'">
-              <div class="ml-6 mr-2 p-2.5 rounded-lg border border-slate-200 bg-white space-y-2">
-                <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                  检索式审批（勾选启用，可直接编辑）
+            <!-- 第一问：检索式审批（多选题形态，生成的条目默认勾选，末尾可补充自定义） -->
+            <template v-if="m.intents && i === lastParseMsgIdx && setup.phase === 'queries'">
+              <div class="mr-10 p-2.5 rounded-lg border border-slate-200 bg-white space-y-2">
+                <div class="text-xs text-slate-700">
+                  我为这个目标生成了 {{ setup.intents.length }} 条检索式，请确认参与本次检索的条目（可直接编辑）：
                 </div>
                 <div v-if="!setup.intents.length" class="text-[11px] text-slate-400">
-                  尚未生成检索式；补充信息后会自动重新生成，也可按默认参数直接执行。
+                  尚未生成检索式；可勾选下方「其它」自行补充，或按默认参数直接执行。
                 </div>
                 <div v-for="(si, siIdx) in setup.intents" :key="siIdx" class="space-y-0.5">
                   <div class="flex items-center gap-2">
@@ -170,8 +170,28 @@
                   </div>
                   <div v-if="si.explanation" class="text-[11px] text-slate-400 pl-[6.5rem]">{{ si.explanation }}</div>
                 </div>
+                <!-- 第四项：其它，请补充 -->
+                <div class="flex items-center gap-2 pt-1 border-t border-slate-100">
+                  <el-checkbox v-model="customQuery.checked" size="small" label="其它，请补充" class="shrink-0" />
+                  <el-input
+                    v-model="customQuery.text"
+                    size="small"
+                    class="font-mono"
+                    :disabled="!customQuery.checked"
+                    placeholder="输入自定义检索式（PubMed 语法）…"
+                  />
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                  <span class="text-[11px] text-slate-400">确认后我们再选择研究领域。</span>
+                  <el-button type="primary" size="small" @click="confirmQueries">确认检索式，继续</el-button>
+                </div>
+              </div>
+            </template>
 
-                <div class="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-2">
+            <!-- 第二问：研究领域选择（内联在确认消息下） -->
+            <template v-if="setup.phase === 'domain' && i === setup.messages.length - 1">
+              <div class="mr-10 p-2.5 rounded-lg border border-slate-200 bg-white space-y-2">
+                <div class="flex items-center justify-between gap-2">
                   <div class="flex items-center gap-2 text-[11px]">
                     <span class="font-semibold text-slate-500 uppercase tracking-wide">研究领域</span>
                     <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
@@ -228,14 +248,8 @@
                 </div>
 
                 <div class="flex items-center justify-end pt-1">
-                  <el-button
-                    type="primary"
-                    size="small"
-                    :disabled="setup.phase === 'clarify'"
-                    :title="setup.phase === 'clarify' ? '请先回答澄清问题或跳过追问' : '批准检索式并开始挖掘'"
-                    @click="runSetup"
-                  >
-                    批准并开始挖掘
+                  <el-button type="primary" size="small" @click="runSetup">
+                    {{ setup.domainName ? '开始挖掘（使用该领域）' : '开始挖掘（使用默认领域）' }}
                   </el-button>
                 </div>
               </div>
@@ -1017,7 +1031,8 @@ const {
   selectClaim, evidenceSpans, clearError, refreshQueue, claimVersions,
   submitReviewDecision,
   workflowPanelOpen, taskStatus, taskSteps,
-  setup, startGoalSetup, sendClarification, confirmAndRun, closeSetup,
+  setup, startGoalSetup, sendClarification, confirmQueries, confirmAndRun, closeSetup,
+  customQuery,
   reviewQueue, refreshClaims, refreshAggregations,
 } = useResearch();
 
@@ -1380,7 +1395,8 @@ const setupPhaseLabel = computed(() => {
   switch (setup.value?.phase) {
     case 'parsing': return '解析中';
     case 'clarify': return '等待你的回答';
-    case 'ready': return '待确认';
+    case 'queries': return '确认检索式';
+    case 'domain': return '选择研究领域';
     case 'running': return '挖掘执行中';
     default: return '';
   }
@@ -1494,10 +1510,11 @@ async function submitAnswers() {
 }
 
 function skipClarify() {
-  if (!setup.value) { return; }
+  if (!setup.value || setup.value.phase !== 'clarify') { return; }
+  // 跳过追问 → 进入检索式确认（检索式可能为空，使用默认参数执行）
+  stopCountdown();
   setup.value.rounds = 99;
-  setup.value.phase = 'ready';
-  setup.value.messages.push({ sender: 'ai', text: '已跳过追问，将按当前解析结果执行（缺失字段使用默认值）。' });
+  setup.value.phase = 'queries';
   void nextTick(scrollSetupChat);
 }
 
