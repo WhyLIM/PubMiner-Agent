@@ -372,6 +372,7 @@ async function switchSession(id: string) {
   try {
     await Promise.all([
       refreshSession(),
+      refreshClaims(),
       refreshAggregations(),
       refreshDocuments(),
       refreshQueue(),

@@ -542,10 +542,13 @@ class MiningWorkflow:
             known.add(mention)
             try:
                 candidates, needs_review = self.ports.normalize.resolve(
-                    mention, (extraction.get("biomarker_type") or "GENE").upper()
+                    mention, (extraction.get("biomarker_type") or "GENE").upper(),
+                    session=self.task_repo.session,
                 )
             except Exception as exc:
-                raise WorkflowStepError(f"normalize failed for {mention}: {exc}") from exc
+                # 单个 mention 解析失败不阻断扩展轮：标记未解析送人工复核
+                logger.warning("normalize failed for %r (unresolved): %s", mention, exc)
+                candidates, needs_review = [], True
             resolutions.append({
                 "mention": mention,
                 "candidates": [c.__dict__ for c in candidates],

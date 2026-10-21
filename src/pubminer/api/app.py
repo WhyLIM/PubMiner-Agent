@@ -691,7 +691,8 @@ def create_app(container: Container) -> FastAPI:
             return {
                 "ok": True,
                 "deleted": {"claims": claims_n, "evidence": evidence_n, "reviews": review_n,
-                            "tasks": tasks_n, "run_steps": steps_n, "messages": msgs_n},
+                            "tasks": tasks_n, "run_steps": steps_n, "messages": msgs_n,
+                            "coverage_snapshots": cov_n},
             }
 
     @app.get("/api/v1/agent/sessions")
