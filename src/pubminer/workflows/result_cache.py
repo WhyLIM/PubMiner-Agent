@@ -81,9 +81,10 @@ class CachedVerifyPort:
         self.cache_hits = 0
 
     def verify(self, signature: str, evidence, *, session=None):
+        # 与 LlmVerifyPort 同字段：VERIFY 阶段入参是 BiomarkerEvidence（evidence_span，非 span）
         stats_json = evidence.statistics.model_dump(mode="json") if evidence.statistics else ""
         key = _sha(
-            f"{self.prompt_version}|{signature}|{evidence.span.text}|{stats_json}"
+            f"{self.prompt_version}|{signature}|{evidence.evidence_span.text}|{stats_json}"
         )
         if session is not None:
             from pubminer.infrastructure.db.repositories.llm_cache import ResultCacheRepository
