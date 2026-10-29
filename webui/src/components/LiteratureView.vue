@@ -73,6 +73,28 @@
       </div>
     </div>
 
+    <!-- 挖掘执行中：置顶横幅（停靠在主导航下方），当前步骤 + 进度一目了然 -->
+    <div
+      v-if="miningActive"
+      class="sticky top-14 z-30 rounded-lg overflow-hidden border border-sky-300 bg-gradient-to-r from-sky-600 via-sky-500 to-sky-600 text-white shadow-md"
+    >
+      <div class="px-4 py-2.5 flex items-center gap-3 flex-wrap">
+        <span class="relative flex h-2.5 w-2.5 shrink-0">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+        </span>
+        <span class="text-sm font-bold tracking-wide">管线执行中</span>
+        <span class="px-2 py-0.5 rounded bg-white/20 text-xs font-medium">{{ miningBannerLabel }}</span>
+        <div class="flex-1 min-w-[120px] h-1.5 bg-white/25 rounded-full overflow-hidden">
+          <div class="h-full bg-white rounded-full transition-all duration-700" :style="{ width: miningProgressPct + '%' }"></div>
+        </div>
+        <span class="text-xs font-mono text-sky-50">{{ wfSucceeded }}/{{ miningTotalSteps }} 步</span>
+        <button class="text-xs text-sky-50 hover:text-white underline underline-offset-2 shrink-0" @click="workflowPanelOpen = true">
+          查看详情
+        </button>
+      </div>
+    </div>
+
     <!-- 研究目标确认：ant-design-x-vue 对话式面板（问题卡片/检索式审批/领域选择内联对话流） -->
     <SetupChat v-if="setup" />
 
@@ -865,6 +887,19 @@ const isSearching = computed(() => miningActive.value);
 // ---- 管线执行监控面板 ----
 const wfLiveStatus = computed(() => taskStatus.value);
 const wfSucceeded = computed(() => taskSteps.value.filter(s => s.status === 'SUCCEEDED').length);
+/** 标准管线 14 步（含引文扩展轮）；步骤行未建全时以 14 为分母 */
+const miningTotalSteps = computed(() => Math.max(14, taskSteps.value.length));
+const miningProgressPct = computed(() =>
+  Math.min(100, Math.round((wfSucceeded.value / miningTotalSteps.value) * 100)),
+);
+const miningBannerLabel = computed(() => {
+  const map: Record<string, string> = {
+    CREATED: '准备中', PLANNING: '规划中', SEARCHING: '检索文献', SCREENING: '三层筛选',
+    EXTRACTING: '断言抽取', NORMALIZING: '实体归一化', VERIFYING: '跨文献验证',
+    REVIEW_READY: '已完成', COMPLETED: '已完成', PARTIAL: '部分完成',
+  };
+  return map[taskStatus.value ?? ''] ?? (taskStatus.value ?? '执行中');
+});
 const wfStatusClass = computed(() => {
   const s = wfLiveStatus.value;
   if (!s) { return 'bg-slate-100 text-slate-600'; }

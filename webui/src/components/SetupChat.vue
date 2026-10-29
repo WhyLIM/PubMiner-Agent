@@ -121,68 +121,88 @@
               </div>
             </div>
 
-            <!-- 第二问：研究领域选择（内联在最后一条消息下） -->
+            <!-- 第二问：研究领域选择（默认 / 默认+自定义 / 仅自定义，默认为合并） -->
             <div v-if="setup.phase === 'domain' && i === setup.messages.length - 1" class="pl-10 max-w-[92%]">
-              <div class="p-3 rounded-lg border border-slate-200 bg-white space-y-2">
-                <div class="flex items-center justify-between gap-2">
+              <div class="p-3 rounded-lg border border-slate-200 bg-white space-y-2.5">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
                   <div class="flex items-center gap-2 text-[11px]">
                     <span class="font-semibold text-slate-500 uppercase tracking-wide">研究领域</span>
                     <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
-                      {{ setup.domainName || '默认（按任务自动匹配）' }}
+                      {{ domainBadgeText }}
                     </span>
                   </div>
-                  <div class="flex items-center gap-1.5">
+                  <el-radio-group v-model="setup.domainMode" size="small">
+                    <el-radio-button value="default">仅默认</el-radio-button>
+                    <el-radio-button value="merge">默认＋自定义</el-radio-button>
+                    <el-radio-button value="replace">仅自定义</el-radio-button>
+                  </el-radio-group>
+                </div>
+
+                <div class="text-[11px] text-slate-500 leading-relaxed">
+                  {{ domainModeHint }}
+                </div>
+
+                <template v-if="setup.domainMode !== 'default'">
+                  <div class="flex items-center gap-1.5 pt-0.5 border-t border-slate-100">
+                    <span class="text-[11px] text-slate-400 shrink-0">定义自定义领域</span>
                     <el-button size="small" @click="domainTab = domainTab === 'paste' ? '' : 'paste'">粘贴 JSON</el-button>
                     <el-button size="small" @click="domainTab = domainTab === 'generate' ? '' : 'generate'">AI 生成</el-button>
+                    <span v-if="setup.domainName" class="text-[11px] text-emerald-600 ml-auto">
+                      已保存：{{ setup.domainName }}
+                    </span>
                   </div>
-                </div>
 
-                <div v-if="domainTab" class="space-y-2">
-                  <el-input
-                    v-if="domainTab === 'generate'"
-                    v-model="domainDescription"
-                    size="small"
-                    placeholder="描述研究领域（如：阿尔茨海默病脑脊液蛋白标志物，关注预后）…"
-                  />
-                  <el-input
-                    v-else
-                    v-model="domainJsonText"
-                    type="textarea"
-                    :rows="6"
-                    placeholder="粘贴领域定义 JSON。粘贴后点解析校准，AI 会补齐缺失字段并规范化格式。"
-                  />
-                  <div class="flex items-center gap-2">
-                    <el-button
+                  <div v-if="domainTab" class="space-y-2">
+                    <el-input
+                      v-if="domainTab === 'generate'"
+                      v-model="domainDescription"
                       size="small"
-                      type="primary"
-                      :loading="domainBusy"
-                      @click="domainTab === 'generate' ? runGenerate() : runCalibrate()"
-                    >
-                      {{ domainTab === 'generate' ? 'AI 生成领域' : '解析校准' }}
-                    </el-button>
-                  </div>
-                </div>
-
-                <div v-if="domainPreview" class="space-y-2">
-                  <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                    领域预览（name: {{ domainPreview.name }}）— 可编辑后保存
-                  </div>
-                  <el-input v-model="domainPreviewText" type="textarea" :rows="8" class="font-mono" />
-                  <template v-if="domainPreviewFields">
-                    <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                      抽取字段预览（{{ domainPreviewFields.name }}）
+                      placeholder="描述研究领域（如：阿尔茨海默病脑脊液蛋白标志物，关注预后）…"
+                    />
+                    <el-input
+                      v-else
+                      v-model="domainJsonText"
+                      type="textarea"
+                      :rows="6"
+                      placeholder="粘贴领域定义 JSON。粘贴后点解析校准，AI 会补齐缺失字段并规范化格式。"
+                    />
+                    <div class="flex items-center gap-2">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        :loading="domainBusy"
+                        @click="domainTab === 'generate' ? runGenerate() : runCalibrate()"
+                      >
+                        {{ domainTab === 'generate' ? 'AI 生成领域' : '解析校准' }}
+                      </el-button>
                     </div>
-                    <el-input v-model="domainPreviewFieldsText" type="textarea" :rows="5" class="font-mono" />
-                  </template>
-                  <div class="flex items-center gap-2">
-                    <el-button size="small" type="success" :loading="domainBusy" @click="saveDomain">保存并使用此领域</el-button>
-                    <el-button size="small" text @click="domainPreview = null">放弃</el-button>
                   </div>
-                </div>
 
-                <div class="flex items-center justify-end pt-1">
-                  <el-button type="primary" size="small" @click="runSetup">
-                    {{ setup.domainName ? '开始挖掘（使用该领域）' : '开始挖掘（使用默认领域）' }}
+                  <div v-if="domainPreview" class="space-y-2">
+                    <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                      领域预览（name: {{ domainPreview.name }}）— 可编辑后保存
+                    </div>
+                    <el-input v-model="domainPreviewText" type="textarea" :rows="8" class="font-mono" />
+                    <template v-if="domainPreviewFields">
+                      <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                        抽取字段预览（{{ domainPreviewFields.name }}）
+                      </div>
+                      <el-input v-model="domainPreviewFieldsText" type="textarea" :rows="5" class="font-mono" />
+                    </template>
+                    <div class="flex items-center gap-2">
+                      <el-button size="small" type="success" :loading="domainBusy" @click="saveDomain">保存并使用此领域</el-button>
+                      <el-button size="small" text @click="domainPreview = null">放弃</el-button>
+                    </div>
+                  </div>
+                </template>
+
+                <div class="flex items-center justify-between pt-1">
+                  <span v-if="setup.domainMode === 'replace' && !setup.domainName" class="text-[11px] text-amber-600">
+                    仅自定义模式需先保存一个自定义领域（上方粘贴或 AI 生成）
+                  </span>
+                  <span v-else class="text-[11px] text-slate-400">点击开始后将按管线执行：检索 → 抽取 → 验证 → 聚合</span>
+                  <el-button type="primary" size="small" :disabled="!canRunFromDomain" @click="runSetup">
+                    {{ runButtonText }}
                   </el-button>
                 </div>
               </div>
@@ -357,7 +377,7 @@ function skipClarify() {
   setup.value.phase = 'queries';
 }
 
-// ---- 研究领域（AskHuman 扩展：粘贴/生成/校准/保存） ----
+// ---- 研究领域（AskHuman 扩展：默认/合并/仅自定义 + 粘贴/生成/校准/保存） ----
 const domainTab = ref<'' | 'paste' | 'generate'>('');
 const domainDescription = ref('');
 const domainJsonText = ref('');
@@ -366,6 +386,41 @@ const domainPreviewText = ref('');
 const domainPreviewFields = ref<Record<string, unknown> | null>(null);
 const domainPreviewFieldsText = ref('');
 const domainBusy = ref(false);
+
+const domainBadgeText = computed(() => {
+  const name = setup.value?.domainName;
+  switch (setup.value?.domainMode) {
+    case 'default': return '默认（按任务自动匹配）';
+    case 'replace': return name ? `仅自定义：${name}` : '自定义（未定义）';
+    default: return name ? `默认＋${name}` : '默认（未定义自定义，等同仅默认）';
+  }
+});
+
+const domainModeHint = computed(() => {
+  switch (setup.value?.domainMode) {
+    case 'default':
+      return '使用内置领域定义（按研究任务自动匹配生物标志物等领域），不做任何自定义扩展。';
+    case 'replace':
+      return '完全使用你定义的自定义领域，替换内置定义（谓词、实体类型、抽取字段均以自定义为准）。';
+    default:
+      return '推荐：自定义领域将并入默认领域——实体类型、谓词与抽取字段取并集，验证阈值等安全红线保持默认，兼顾覆盖面与稳定性。';
+  }
+});
+
+const canRunFromDomain = computed(() => {
+  const s = setup.value;
+  if (!s) { return false; }
+  if (s.domainMode === 'replace') { return !!s.domainName; }
+  return true;
+});
+
+const runButtonText = computed(() => {
+  const s = setup.value;
+  if (!s) { return '开始挖掘'; }
+  if (s.domainMode === 'default') { return '开始挖掘（使用默认领域）'; }
+  if (s.domainMode === 'replace') { return s.domainName ? `开始挖掘（仅使用 ${s.domainName}）` : '开始挖掘（需先保存自定义领域）'; }
+  return s.domainName ? `开始挖掘（默认＋${s.domainName}）` : '开始挖掘（使用默认领域）';
+});
 
 function setDomainPreview(domain: Record<string, unknown>, extractionFields: Record<string, unknown> | null) {
   domainPreview.value = domain;

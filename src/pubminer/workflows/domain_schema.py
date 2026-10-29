@@ -91,3 +91,29 @@ def load_domain_by_name(name: str, root: Path | None = None) -> DomainDefinition
             f"domain {name!r} not found; available: {', '.join(sorted(available))}"
         )
     return load_domain(path)
+
+
+def merge_domains(base: DomainDefinition, extra: DomainDefinition) -> DomainDefinition:
+    """默认 + 自定义合并：extra 并入 base。
+
+    实体类型/谓词/方向/结局提示/导出映射取并集（同名时 extra 覆盖 base 词条说明）；
+    验证阈值等安全红线（iv_min_documents、p_value_threshold）保留 base——
+    自定义领域不得放宽独立验证门槛；签名模板沿用 base 保持聚合键稳定。
+    """
+    return DomainDefinition(
+        name=f"{base.name}+{extra.name}",
+        display=f"{base.display}＋{extra.display}",
+        entity_label=base.entity_label,
+        default_task=base.default_task or extra.default_task,
+        entity_types={**base.entity_types, **extra.entity_types},
+        predicates={**base.predicates, **extra.predicates},
+        directions=list(dict.fromkeys([*base.directions, *extra.directions])),
+        outcome_hints=list(dict.fromkeys([*base.outcome_hints, *extra.outcome_hints])),
+        signature_template=base.signature_template,
+        verification=base.verification,
+        screen_hints=(f"{base.screen_hints}\n{extra.screen_hints}".strip()
+                      if extra.screen_hints else base.screen_hints),
+        extraction_fields_schema=extra.extraction_fields_schema or base.extraction_fields_schema,
+        export_mappings={**base.export_mappings, **extra.export_mappings},
+        object_label=base.object_label or extra.object_label,
+    )

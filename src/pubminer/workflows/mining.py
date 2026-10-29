@@ -124,8 +124,12 @@ class MiningWorkflow:
         screen_criteria: str | None = None,
         citation_expansion: bool = True,
         domain: str | None = None,
+        domain_mode: str | None = None,
     ) -> UUID:
-        """创建任务并立即执行；返回 task_id。"""
+        """创建任务并立即执行；返回 task_id。
+
+        domain_mode: "merge"（默认+自定义并集）| "replace"（仅自定义）| None（domain 存在时等价 replace）。
+        """
         task_citation_expansion = citation_expansion and getattr(self.ports, "citations", None) is not None
         task = Task(
             id=task_id or uuid4(),
@@ -136,6 +140,7 @@ class MiningWorkflow:
                 "screen_criteria": screen_criteria,
                 "citation_expansion": task_citation_expansion,
                 "domain": domain,
+                "domain_mode": domain_mode,
             },
         )
         self.task_repo.create(task)
@@ -155,12 +160,18 @@ class MiningWorkflow:
 
     def _execute(self, task: Task, *, resume_from: int) -> UUID:
         # 会话级领域覆盖：task.request["domain"] 优先于装配时默认（start/resume 通用）
+        # domain_mode="merge" 时自定义领域并入默认（枚举/提示词并集，安全阈值保留默认）
         domain_name = task.request.get("domain")
         if domain_name and domain_name != getattr(self.domain, "name", None):
-            from pubminer.workflows.domain_schema import load_domain_by_name
+            from pubminer.workflows.domain_schema import load_domain_by_name, merge_domains
 
-            self.domain = load_domain_by_name(str(domain_name))
-            logger.info("domain override: %s", domain_name)
+            loaded = load_domain_by_name(str(domain_name))
+            if task.request.get("domain_mode") == "merge":
+                logger.info("domain merge: %s + %s", getattr(self.domain, "name", "?"), domain_name)
+                self.domain = merge_domains(self.domain, loaded)
+            else:
+                self.domain = loaded
+                logger.info("domain override: %s", domain_name)
         state: dict = {}
         sequence = self._sequence(task)
         for index, step_name in enumerate(sequence):

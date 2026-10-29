@@ -276,6 +276,7 @@ export const agentApi = {
     max_results?: number;
     screen_criteria?: string | null;
     domain?: string;
+    domain_mode?: 'merge' | 'replace';
   }) =>
     request<{ task_id: string; status: string; plan_version: number }>(
       `/api/v1/agent/sessions/${sessionId}/run`,

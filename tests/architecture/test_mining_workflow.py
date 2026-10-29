@@ -381,3 +381,62 @@ class TestResumeNoOp:
             task = TaskRepository(session).get(task_id)
             assert task.status == TaskStatus.REVIEW_READY
             assert steps_after == steps_before, "已完成任务的 resume 必须是空操作"
+
+
+class TestDomainMerge:
+    """默认+自定义合并：枚举/提示词并集，验证阈值等安全红线保留默认。"""
+
+    def _base(self):
+        from pubminer.workflows.domain_schema import DomainDefinition
+
+        return DomainDefinition(
+            name="biomarker", display="生物标志物", entity_label="biomarker",
+            default_task="prognostic_biomarker",
+            entity_types={"GENE": "GENE", "PROTEIN": "PROTEIN"},
+            predicates={"prognostic": "PROGNOSTIC"},
+            directions=["HIGH", "LOW"],
+            outcome_hints=["overall_survival"],
+            signature_template="{subject} | {predicate} | {object} | {direction}",
+            verification={"iv_min_documents": 3, "p_value_threshold": 0.05},
+            screen_hints="base hints",
+        )
+
+    def _extra(self):
+        from pubminer.workflows.domain_schema import DomainDefinition
+
+        return DomainDefinition(
+            name="drugtarget", display="药物靶点", entity_label="target",
+            default_task="",
+            entity_types={"DRUG": "DRUG"},
+            predicates={"inhibits": "INHIBITS"},
+            directions=["HIGH", "AGONT"],
+            outcome_hints=["overall_survival", "tumor_response"],
+            signature_template="{predicate} | {subject}",
+            verification={"iv_min_documents": 1},  # 试图放宽独立验证门槛
+            screen_hints="extra hints",
+        )
+
+    def test_merge_unions_enums_and_keeps_base_thresholds(self):
+        from pubminer.workflows.domain_schema import merge_domains
+
+        merged = merge_domains(self._base(), self._extra())
+        # 并集：实体类型/谓词/方向/结局提示
+        assert set(merged.entity_types) == {"GENE", "PROTEIN", "DRUG"}
+        assert set(merged.predicates) == {"prognostic", "inhibits"}
+        assert merged.directions == ["HIGH", "LOW", "AGONT"]
+        assert merged.outcome_hints == ["overall_survival", "tumor_response"]
+        # 安全红线：验证阈值保留 base，自定义不得放宽
+        assert merged.verification == {"iv_min_documents": 3, "p_value_threshold": 0.05}
+        # 签名模板沿用 base，聚合键稳定；筛选提示拼接
+        assert merged.signature_template == self._base().signature_template
+        assert "base hints" in merged.screen_hints and "extra hints" in merged.screen_hints
+        assert merged.name == "biomarker+drugtarget"
+
+    def test_merged_domain_validates_both_sides(self):
+        from pubminer.workflows.domain_schema import merge_domains
+
+        merged = merge_domains(self._base(), self._extra())
+        assert merged.predicate_for_role("inhibits") == "INHIBITS"
+        assert merged.predicate_for_role("prognostic") == "PROGNOSTIC"
+        assert merged.entity_type_for("drug") == "DRUG"
+        assert merged.direction_is_valid("AGONT") and merged.direction_is_valid("low")

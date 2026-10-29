@@ -916,6 +916,7 @@ def create_app(container: Container) -> FastAPI:
                     intents=intents,
                     screen_criteria=screen_criteria,
                     domain=body.domain,
+                    domain_mode=body.domain_mode,
                 )
             except WorkflowFatalError as exc:
                 raise HTTPException(422, str(exc))

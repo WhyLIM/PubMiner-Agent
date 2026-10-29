@@ -103,6 +103,8 @@ export interface SetupState {
   rounds: number;
   /** 自定义领域名（保存后设置；confirmAndRun 时随任务下发） */
   domainName: string | null;
+  /** 领域应用方式：merge=默认+自定义并集（默认） | replace=仅自定义 | default=仅默认 */
+  domainMode: 'merge' | 'replace' | 'default';
 }
 const setup = ref<SetupState | null>(null);
 
@@ -337,14 +339,14 @@ async function deleteSession(id: string) {
 }
 
 /** 清空活动会话状态（全部课题被删除后的空工作台） */
-function clearActiveSession() {
-  sessionId.value = null;
-  localStorage.removeItem(SESSION_KEY);
+/** 清空工作区数据（不动 sessionId）：新建课题开始时避免残留上一课题的命题/文献/监控 */
+function resetWorkspaceData() {
   session.value = null;
   aggregations.value = [];
   documents.value = [];
   claims.value = [];
   reviewQueue.value = [];
+  tasks.value = [];
   evidenceSpans.value = [];
   selectedClaimId.value = null;
   coverage.value = null;
@@ -353,6 +355,12 @@ function clearActiveSession() {
   taskStatus.value = null;
   taskSteps.value = [];
   events.value = [];
+}
+
+function clearActiveSession() {
+  sessionId.value = null;
+  localStorage.removeItem(SESSION_KEY);
+  resetWorkspaceData();
 }
 
 /** 课题切换：切换活动会话并按新会话刷新全部数据 */
@@ -498,11 +506,48 @@ function stopPolling() {
   miningActive.value = false;
 }
 
-/** 运行指定会话并轮询至终态（不负责创建/批准计划） */
+/** 运行指定会话并轮询至终态（不负责创建/批准计划）。
+ *  run 端点是同步的（响应返回即管线完成）——不能等它：先发请求，
+ *  再从任务列表发现新任务并立即开始轮询，执行期间横幅/监控实时可见。 */
 async function runAndWait(sessionIdValue: string, body: Parameters<typeof agentApi.runSession>[1]) {
-  const task = await agentApi.runSession(sessionIdValue, body);
+  // 记录现有非终态任务，用于识别本次新建的任务
+  const preExisting = new Set<string>();
+  try {
+    const before = await agentApi.listTasks(10);
+    for (const t of before.tasks) {
+      if (t.session_id === sessionIdValue && !TERMINAL_STATUSES.has(t.status)) {
+        preExisting.add(t.task_id);
+      }
+    }
+  } catch { /* 识别退化：稍后按最新非终态任务兜底 */ }
+
+  miningActive.value = true; // 发出请求即显示执行横幅
+  const runPromise = agentApi.runSession(sessionIdValue, body);
+
+  // 后端创建任务行后即可在列表看到（通常 1-2 秒内）；DB 繁忙时静默重试
+  const discoverDeadline = Date.now() + 30_000;
+  let discovered: string | null = null;
+  while (Date.now() < discoverDeadline) {
+    await new Promise(r => setTimeout(r, 1200));
+    try {
+      const list = await agentApi.listTasks(10);
+      const fresh = list.tasks.find(t =>
+        t.session_id === sessionIdValue && !TERMINAL_STATUSES.has(t.status) && !preExisting.has(t.task_id));
+      if (fresh) { discovered = fresh.task_id; break; }
+    } catch { /* 轮询失败重试 */ }
+  }
+  if (discovered) {
+    startPolling(discovered);
+    while (pollHandle !== null) {
+      await new Promise(r => setTimeout(r, POLL_INTERVAL));
+    }
+    // runPromise 与轮询终态一致，取后端响应为准
+    return await runPromise;
+  }
+
+  // 兜底：任务发现失败（如列表接口持续不可用）——等同步响应，终态刷新
+  const task = await runPromise;
   startPolling(task.task_id);
-  // 等待轮询至终态（pollOnce 内部到终态会 stopPolling + refreshAll）
   while (pollHandle !== null && runningTaskId.value === task.task_id) {
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
   }
@@ -562,12 +607,16 @@ async function startGoalSetup(goal: string): Promise<void> {
     intents: [],
     rounds: 0,
     domainName: null,
+    domainMode: 'merge',
   };
   workflowPanelOpen.value = false;
   try {
     const created = await agentApi.createSession({ goal, user_id: 'webui' });
+    // 新课题：清空上一课题的命题/文献/监控，页面从空白开始
+    resetWorkspaceData();
     sessionId.value = created.session_id;
     localStorage.setItem(SESSION_KEY, created.session_id);
+    await refreshSession();
     await applyParse();
   } catch (err) {
     setup.value = null;
@@ -685,7 +734,9 @@ async function confirmAndRun(): Promise<void> {
       year_from: (s.fields.year_from as number) || undefined,
       year_to: (s.fields.year_to as number) || undefined,
       max_results: 50,
-      domain: s.domainName || undefined,
+      // domainMode=default 或未保存自定义领域 → 纯默认；否则带 mode 下发
+      domain: s.domainMode === 'default' ? undefined : (s.domainName || undefined),
+      domain_mode: s.domainMode === 'replace' ? 'replace' : 'merge',
     });
     setup.value = null;
   } catch (err) {

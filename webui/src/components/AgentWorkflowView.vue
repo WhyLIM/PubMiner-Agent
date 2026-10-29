@@ -206,8 +206,9 @@ async function loadLatestTask() {
     const latest = sessionTasks.value[0];
     if (!latest) { return; }
     taskId.value = latest.task_id;
-    if (latest.status === 'RUNNING' || latest.status === 'CREATED') {
-      // 页面打开时已有任务在跑：接管轮询（W2：与其它视图共享同一 taskId）
+    // 运行中（含 SEARCHING/EXTRACTING 等步骤态）：接管轮询（W2：与其它视图共享同一 taskId）
+    const ACTIVE_STATUSES = ['CREATED', 'PLANNING', 'RUNNING', 'SEARCHING', 'SCREENING', 'EXTRACTING', 'NORMALIZING', 'VERIFYING'];
+    if (ACTIVE_STATUSES.includes(latest.status)) {
       sessionId.value = latest.session_id ?? sessionId.value;
       startPolling(latest.task_id);
       return;

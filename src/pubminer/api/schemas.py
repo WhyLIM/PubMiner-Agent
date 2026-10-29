@@ -1,7 +1,7 @@
 """API schemas：请求/响应模型（前端生成 client 的契约源）。"""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -373,6 +373,8 @@ class RunSessionRequest(BaseModel):
     max_results: int = Field(5, ge=1, le=100)
     screen_criteria: str | None = None
     domain: str | None = None
+    #: 领域应用方式：merge=默认+自定义并集 | replace=仅自定义
+    domain_mode: Literal["merge", "replace"] | None = None
 
 
 class RunSessionResponse(BaseModel):
