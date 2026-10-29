@@ -662,7 +662,7 @@ def create_app(container: Container) -> FastAPI:
         from sqlalchemy import delete as sa_delete, select
 
         from pubminer.domain.reviews import ReviewTargetType
-        from pubminer.infrastructure.db.orm_agents import AgentMessageRow, AgentSessionRow
+        from pubminer.infrastructure.db.orm_agents import AgentMessageRow, AgentSessionRow, CoverageSnapshotRow
         from pubminer.infrastructure.db.orm_claims import ClaimRow, EvidenceRow
         from pubminer.infrastructure.db.orm_reviews import ReviewRow
         from pubminer.infrastructure.db.orm_tasks import RunStepRow, TaskRow
@@ -683,6 +683,9 @@ def create_app(container: Container) -> FastAPI:
             claims_n = session.execute(sa_delete(ClaimRow).where(ClaimRow.session_id == sid)).rowcount
             steps_n = session.execute(sa_delete(RunStepRow).where(RunStepRow.task_id.in_(task_ids))).rowcount
             tasks_n = session.execute(sa_delete(TaskRow).where(TaskRow.session_id == sid)).rowcount
+            cov_n = session.execute(
+                sa_delete(CoverageSnapshotRow).where(CoverageSnapshotRow.session_id == sid)
+            ).rowcount
             msgs_n = session.execute(sa_delete(AgentMessageRow).where(AgentMessageRow.session_id == sid)).rowcount
             sess_row = session.get(AgentSessionRow, sid)
             if sess_row is None:
