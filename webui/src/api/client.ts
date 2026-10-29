@@ -209,11 +209,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       const body = (await response.json()) as {
         error?: { code?: string; message?: string; retryable?: boolean };
         request_id?: string;
+        // FastAPI 422 校验错误体：{detail: [{loc, msg, type}]}
+        detail?: Array<{ loc?: Array<string | number>; msg?: string }> | string;
       };
       code = body.error?.code ?? code;
       message = body.error?.message ?? message;
       retryable = body.error?.retryable ?? retryable;
       requestId = body.request_id ?? requestId;
+      // pydantic 校验错误 → 可读信息（字段名: 原因）
+      if (!body.error?.message && body.detail) {
+        if (typeof body.detail === "string") {
+          message = body.detail;
+        } else if (Array.isArray(body.detail) && body.detail.length) {
+          const parts = body.detail.map((d) => {
+            const field = d.loc?.filter((x) => typeof x === "string").join(".") ?? "";
+            return field ? `${field}: ${d.msg ?? "invalid"}` : (d.msg ?? "invalid");
+          });
+          message = parts.join("; ");
+        }
+      }
     } catch {
       /* 非 JSON 错误体 */
     }

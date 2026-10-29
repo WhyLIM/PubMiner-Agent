@@ -445,7 +445,7 @@ class SaveSchemaRequest(BaseModel):
 
 
 class GenerateSchemaRequest(BaseModel):
-    description: str = Field(..., min_length=5, description="研究领域的自然语言描述")
+    description: str = Field(..., min_length=2, description="研究领域的自然语言描述")
 
 
 class SaveSchemasRequest(BaseModel):
