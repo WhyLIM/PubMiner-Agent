@@ -76,7 +76,7 @@ def _hydrated(pmid: str) -> HydratedDocument:
 from uuid import uuid4
 
 
-def _fake_ports(fail_search_times: int = 0):
+def _fake_ports(fail_search_times: int = 0, fail_screen_times: int = 0):
     hydrated, _ = _hydrated("33145284")
     hydrated2, _ = _hydrated("34567890")
 
@@ -96,7 +96,14 @@ def _fake_ports(fail_search_times: int = 0):
             return hydrated if pmid == "33145284" else hydrated2
 
     class FakeScreen:
+        def __init__(self):
+            self.calls = 0
+            self.fail_times = fail_screen_times
+
         def screen(self, document, criteria=None):
+            self.calls += 1
+            if self.calls <= self.fail_times:
+                raise ConnectionError("gateway disconnected without sending a response")
             return ScreeningDecision(
                 document_id=document.id,
                 label=ScreeningLabel.RELEVANT,
@@ -307,6 +314,50 @@ class TestRecovery:
             assert steps[0]["status"] == "SUCCEEDED"
             # 后续步骤只执行一次
             assert [s["index"] for s in steps].count(1) == 1
+
+
+class TestScreenResilience:
+    """单篇筛选瞬时失败（网关断连）不再拖垮整步；全军覆没才失败可恢复。"""
+
+    def _run(self, session_factory, ports):
+        from pubminer.infrastructure.db.base import session_scope
+        from pubminer.infrastructure.db.repositories.claims import ClaimRepository
+        from pubminer.infrastructure.db.repositories.documents import DocumentRepository
+        from pubminer.infrastructure.db.repositories.entities import EntityRepository
+        from pubminer.infrastructure.db.repositories.workflow import TaskRepository
+
+        with session_scope(session_factory) as session:
+            workflow = MiningWorkflow(
+                ports,
+                document_repo_factory=DocumentRepository,
+                claim_repo_factory=ClaimRepository,
+                entity_repo_factory=EntityRepository,
+                task_repo=TaskRepository(session),
+            )
+            task_id = workflow.start(
+                session_id=None, intents=[SearchIntent(name="discovery", query="q")],
+            )
+            task = TaskRepository(session).get(task_id)
+            steps = TaskRepository(session).list_steps(task_id)
+        return task_id, task, steps
+
+    def test_single_screen_failure_skips_doc_but_pipeline_completes(self, session_factory):
+        # 2 篇文献：第 1 篇筛选断连失败 → 跳过，第 2 篇成功 → 管线完成
+        ports = _fake_ports(fail_screen_times=1)
+        _, task, steps = self._run(session_factory, ports)
+        assert task.status == TaskStatus.REVIEW_READY
+        screen_step = next(s for s in steps if s["type"] == "SCREEN")
+        assert screen_step["status"] == "SUCCEEDED"
+        # 只筛掉 1 篇失败：只有第 2 篇进入抽取（其 claim 正常产出）
+        assert ports.screen.calls == 2
+
+    def test_all_screen_failures_fail_step_for_resume(self, session_factory):
+        # 2 篇全部失败 → 小批次熔断 → FAILED_RETRYABLE，可恢复重跑
+        ports = _fake_ports(fail_screen_times=99)
+        _, task, steps = self._run(session_factory, ports)
+        assert task.status == TaskStatus.FAILED
+        screen_step = next(s for s in steps if s["type"] == "SCREEN")
+        assert screen_step["status"] == "FAILED_RETRYABLE"
 
 
 class TestResumeNoOp:

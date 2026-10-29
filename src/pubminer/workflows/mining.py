@@ -307,13 +307,23 @@ class MiningWorkflow:
             )
 
         # 第二级：LLM 筛选 + 全文级联升级
+        # 单篇瞬时故障（网关断连等，provider 层已重试）不拖垮整步：跳过并记录；
+        # 但开局连续全败视为网关系统性故障，快速失败以便恢复重跑
+        failed_screens: list[str] = []
+        succeeded = 0
         for item in to_screen:
             doc_id = str(item["document"]["id"])
             document = Document.model_validate(item["document"])
             try:
                 decision = self.ports.screen.screen(document, criteria)
             except Exception as exc:
-                raise WorkflowStepError(f"screen failed for {item['pmid']}: {exc}") from exc
+                failed_screens.append(item["pmid"])
+                logger.warning("screen skipped pmid=%s: %s", item["pmid"], exc)
+                # 开局零成功且已连败 ≥3（大批次）或全军覆没（小批次）→ 判定网关系统性故障
+                if succeeded == 0 and (len(failed_screens) >= 3 or len(failed_screens) == len(to_screen)):
+                    raise WorkflowStepError(f"screen failed for {item['pmid']}: {exc}") from exc
+                continue
+            succeeded += 1
             # 第三级：摘要判 UNCERTAIN 且有全文时用全文重筛
             if (
                 decision.label == ScreeningLabel.UNCERTAIN
@@ -326,7 +336,13 @@ class MiningWorkflow:
                 except Exception:
                     pass
             decisions.append(decision.model_dump(mode="json"))
-        return {"decisions": decisions}
+        output = {"decisions": decisions}
+        if failed_screens:
+            output["failed_screens"] = failed_screens
+            logger.warning(
+                "screen skipped %d/%d PMIDs due to errors", len(failed_screens), len(to_screen)
+            )
+        return output
 
     def _step_extract(self, state: dict, task: Task) -> dict:
         relevant = {
@@ -481,14 +497,25 @@ class MiningWorkflow:
         fresh = [item for item in state.get("hydrated", []) if item["pmid"] in expand_pmids]
         decisions: list[dict] = list(state.get("decisions", []))
         criteria = task.request.get("screen_criteria")
+        failed_screens: list[str] = []
         for item in fresh:
             document = Document.model_validate(item["document"])
             try:
                 decision = self.ports.screen.screen(document, criteria)
             except Exception as exc:
-                raise WorkflowStepError(f"screen failed for {item['pmid']}: {exc}") from exc
+                # 扩展轮同口径：单篇失败跳过记录；全军覆没才整步失败
+                failed_screens.append(item["pmid"])
+                logger.warning("screen2 skipped pmid=%s: %s", item["pmid"], exc)
+                continue
             decisions.append(decision.model_dump(mode="json"))
-        return {"decisions": decisions}
+        if fresh and len(failed_screens) == len(fresh):
+            raise WorkflowStepError(
+                f"screen2 failed for all {len(fresh)} expansion PMIDs: {failed_screens[:3]}"
+            )
+        output = {"decisions": decisions}
+        if failed_screens:
+            output["failed_screens"] = failed_screens
+        return output
 
     def _step_extract2(self, state: dict, task: Task) -> dict:
         expand_pmids = set(state.get("expand_pmids", []))

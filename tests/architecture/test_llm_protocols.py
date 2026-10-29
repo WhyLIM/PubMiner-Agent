@@ -162,7 +162,11 @@ class TestAutoNegotiation:
             "responses", "messages", "completions",
         ]
 
-    def test_rate_limit_error_does_not_downgrade(self):
+    def test_rate_limit_error_does_not_downgrade(self, monkeypatch):
+        from pubminer.integrations.llm.providers.base import HttpJsonProvider
+
+        # 429 在 provider 内退避重试（延时置零）；AutoProtocol 的内层候选共享类属性
+        monkeypatch.setattr(HttpJsonProvider, "RETRY_BASE_DELAY", 0)
         calls: list = []
         provider = AutoProtocolProvider(
             "k", "m", base_url="https://gw.example",
@@ -171,8 +175,64 @@ class TestAutoNegotiation:
         )
         with pytest.raises(LLMError, match="429"):
             provider.complete("s", "u", temperature=0, max_tokens=8)
-        # 429 不是协议问题：只打了一个端点，没有降级
-        assert len(calls) == 1 and calls[0].endswith("/responses")
+        # 429 不是协议问题：全部命中同一端点，没有降级
+        assert len(calls) == 3 and all(c.endswith("/responses") for c in calls)
+
+    def test_transport_disconnect_retries_then_succeeds(self):
+        calls: list = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(str(request.url))
+            if len(calls) < 3:
+                raise httpx.RemoteProtocolError("Server disconnected without sending a response")
+            return httpx.Response(200, json={
+                "choices": [{"message": {"content": "recovered"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            })
+
+        from pubminer.integrations.llm.providers.openai_compat import OpenAICompatibleProvider
+
+        provider = OpenAICompatibleProvider(
+            "k", "m", base_url="https://gw.example", transport=_mock(handler),
+        )
+        provider.RETRY_BASE_DELAY = 0
+        text = provider.complete("s", "u", temperature=0, max_tokens=8)[0]
+        assert text == "recovered"
+        assert len(calls) == 3
+
+    def test_transport_disconnect_exhausts_retries(self):
+        calls: list = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(str(request.url))
+            raise httpx.RemoteProtocolError("Server disconnected without sending a response")
+
+        from pubminer.integrations.llm.providers.openai_compat import OpenAICompatibleProvider
+
+        provider = OpenAICompatibleProvider(
+            "k", "m", base_url="https://gw.example", transport=_mock(handler),
+        )
+        provider.RETRY_BASE_DELAY = 0
+        with pytest.raises(LLMError, match="LLM request failed"):
+            provider.complete("s", "u", temperature=0, max_tokens=8)
+        assert len(calls) == 3
+
+    def test_protocol_missing_still_fails_fast_without_retry(self):
+        calls: list = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(str(request.url))
+            return httpx.Response(404, text="no such protocol")
+
+        from pubminer.integrations.llm.providers.openai_compat import OpenAICompatibleProvider
+
+        provider = OpenAICompatibleProvider(
+            "k", "m", base_url="https://gw.example", transport=_mock(handler),
+        )
+        with pytest.raises(ProtocolNotSupportedError):
+            provider.complete("s", "u", temperature=0, max_tokens=8)
+        # 404 是协议探测信号：不重试，单次即失败以便降级
+        assert len(calls) == 1
 
     def test_forced_protocol_skips_probes(self):
         calls: list = []
