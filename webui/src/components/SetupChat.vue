@@ -251,7 +251,7 @@ import { agentApi } from '@/api/client';
 import { useResearch, type SetupQuestion } from '@/composables/useResearch';
 
 const {
-  setup, customQuery, papers, documents, miningActive, workflowPanelOpen,
+  setup, customQuery, papers, documents, workflowPanelOpen,
   sendClarification, confirmQueries, confirmAndRun, closeSetup,
 } = useResearch();
 

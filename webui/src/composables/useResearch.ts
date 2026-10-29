@@ -805,15 +805,14 @@ async function submitReviewDecision(claimId: string, decision: 'ACCEPT' | 'EDIT_
 export function useResearch() {
   return {
     sessionId, session, claims, aggregations, reviewQueue, tasks,
-    evidenceSpans, selectedClaimId, loading, error, events, coverage,
+    evidenceSpans, loading, error, events, coverage,
     documents,
     domains, graphCategories,
     papers, graphNodes, graphLinks, statCards, claimVersions,
     runningTaskId, taskStatus, taskSteps, miningActive, workflowPanelOpen,
     setup, customQuery,
     init, selectClaim, submitReviewDecision,
-    refreshClaims, refreshAggregations, refreshQueue, refreshTasks,
-    refreshDocuments, refreshSession, refreshCoverage, refreshAll,
+    refreshClaims, refreshAggregations, refreshQueue, refreshTasks, refreshAll,
     sessions, switchSession, refreshSessions, deleteSession, clearActiveSession,
     startPolling, runAndWait, clearError,
     startGoalSetup, sendClarification, confirmQueries, confirmAndRun, closeSetup,

@@ -626,6 +626,8 @@ def create_app(container: Container) -> FastAPI:
     @app.post("/api/v1/schemas/save")
     def save_schema(body: schemas.SaveSchemaRequest) -> dict:
         """校验后写入 schemas/domains/{name}.json；抽取字段（若有）一并保存并关联。"""
+        from pydantic import ValidationError
+
         from pubminer.workflows.domain_schema import DEFAULT_DOMAINS_DIR, load_domain
         from pubminer.workflows.schema_validation import DomainSchemaModel, ExtractionFieldsModel
 

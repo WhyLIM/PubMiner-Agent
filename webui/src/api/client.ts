@@ -237,8 +237,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const agentApi = {
-  health: () => request<{ status: string }>("/api/v1/health"),
-
   listSessions: (limit = 20) =>
     request<{
       sessions: Array<{ session_id: string; goal: string; status: string; created_at: string }>;
@@ -298,28 +296,6 @@ export const agentApi = {
   getSession: (sessionId: string) =>
     request<SessionResource>(`/api/v1/agent/sessions/${sessionId}`),
 
-  postMessage: (sessionId: string, body: { role: string; content: string; kind?: string; payload?: Record<string, unknown> }) =>
-    request<{ message_id: string; ok: boolean }>(
-      `/api/v1/agent/sessions/${sessionId}/messages`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
-
-  bindTaskSpec: (
-    sessionId: string,
-    body: {
-      disease?: string | null;
-      task?: string | null;
-      validation_requirement?: string | null;
-      year_from?: number | null;
-      year_to?: number | null;
-      publication_types?: string[];
-    },
-  ) =>
-    request<{ schema_version: string; missing_required_fields: string[] }>(
-      `/api/v1/agent/sessions/${sessionId}/task-spec`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
-
   submitPlan: (sessionId: string, body: { rationale?: string; steps: PlanStep[] }) =>
     request<{ plan_version: number; status: string }>(
       `/api/v1/agent/sessions/${sessionId}/plan`,
@@ -330,11 +306,6 @@ export const agentApi = {
     request<{ approved: number }>(`/api/v1/agent/sessions/${sessionId}/plan/approve`, {
       method: "POST",
       body: JSON.stringify({ plan_version: planVersion }),
-    }),
-
-  pause: (sessionId: string) =>
-    request<{ status: string }>(`/api/v1/agent/sessions/${sessionId}/actions/pause`, {
-      method: "POST",
     }),
 
   fetchEvents: (sessionId: string, since: number) =>
@@ -349,15 +320,6 @@ export const agentApi = {
       }>;
       next_since: number;
     }>(`/api/v1/agent/sessions/${sessionId}/events?format=json&since=${since}`),
-
-  createTask: (body: {
-    session_id?: string | null;
-    intents: Array<{ name: string; query: string; max_results?: number }>;
-  }) =>
-    request<{ task_id: string; status: string }>("/api/v1/tasks", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
 
   getTask: (taskId: string) =>
     request<{
@@ -415,11 +377,6 @@ export const agentApi = {
   getDocument: (documentId: string) =>
     request<DocumentDetail>(`/api/v1/documents/${documentId}`),
 
-  listDomainSchemas: () =>
-    request<{ schemas: Array<{ name: string; display: string; entity_label: string; default_task: string; object_label: string; file: string }> }>(
-      "/api/v1/schemas",
-    ),
-
   generateDomainSchema: (description: string) =>
     request<{ domain: Record<string, unknown>; extraction_fields: Record<string, unknown> | null }>(
       "/api/v1/schemas/generate",
@@ -443,11 +400,6 @@ export const agentApi = {
       ok: boolean;
       deleted: { claims: number; evidence: number; reviews: number; tasks: number; run_steps: number; messages: number };
     }>(`/api/v1/agent/sessions/${sessionId}`, { method: "DELETE" }),
-
-  cancelTask: (taskId: string) =>
-    request<{ task_id: string; status: string }>(`/api/v1/tasks/${taskId}/actions/cancel`, {
-      method: "POST",
-    }),
 
   askEvidence: (sessionId: string, question: string) =>
     request<{

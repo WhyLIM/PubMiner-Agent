@@ -408,3 +408,15 @@ class TestClarifyLoop:
             json={"disease": "PDAC", "task": "prognostic_biomarker", "max_results": 3},
         )
         assert run.status_code in (202, 503)  # 503 = 无真实端口
+
+
+class TestSchemaSaveValidation:
+    def test_save_invalid_domain_returns_422_not_500(self, app_client, tmp_path):
+        """非法领域定义应返回 422 校验错误——回归：except ValidationError 曾因未导入而 NameError→500。"""
+        body = {
+            "domain": {"name": "bad_domain", "predicates": {"x": "NOT_A_LEGAL_PREDICATE"}},
+            "target_dir": str(tmp_path),
+        }
+        response = app_client.post("/api/v1/schemas/save", json=body)
+        assert response.status_code == 422, response.text
+        assert "校验失败" in response.json()["error"]["message"]

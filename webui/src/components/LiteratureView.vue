@@ -841,7 +841,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import SpanHighlight from './SpanHighlight.vue';
 import AgentWorkflowView from './AgentWorkflowView.vue';

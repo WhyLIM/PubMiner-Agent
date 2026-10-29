@@ -22,7 +22,7 @@ class TaskRepository:
         self._session = session
 
     @property
-    def session(self) -> Session:  # noqa: A003 — 供 workflow 装配层复用同一事务
+    def session(self) -> Session:  # 供 workflow 装配层复用同一事务
         return self._session
 
     def create(self, task: Task) -> Task:

@@ -297,10 +297,9 @@ class MiningWorkflow:
                 criteria or task.request.get("screen_criteria", "biomarker evidence")
             )
             candidates = [
-                {"pmid": item["pmid"], "doc_id": doc_id,
+                {"pmid": item["pmid"], "doc_id": str(item["document"]["id"]),
                  "abstract": item["document"].get("abstract", "")}
-                for item, doc_id in ((item, str(item["document"]["id"])) for item in to_screen)
-                for item in [item]
+                for item in to_screen
             ]
             texts = [c["abstract"] for c in candidates]
             scores = embedding_service.similarity_to_profile(
@@ -323,7 +322,6 @@ class MiningWorkflow:
         failed_screens: list[str] = []
         succeeded = 0
         for item in to_screen:
-            doc_id = str(item["document"]["id"])
             document = Document.model_validate(item["document"])
             try:
                 decision = self.ports.screen.screen(document, criteria)
