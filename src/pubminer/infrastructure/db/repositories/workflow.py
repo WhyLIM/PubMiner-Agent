@@ -5,11 +5,16 @@ import uuid
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from pubminer.domain.tasks import Task
 from pubminer.infrastructure.db.orm_tasks import RunStepRow, TaskRow
+
+#: 运行中（非终态）任务状态——进程重启时这些任务已无执行线程，属孤儿
+RUNNING_STATUSES = (
+    "CREATED", "PLANNING", "SEARCHING", "SCREENING", "EXTRACTING", "NORMALIZING", "VERIFYING",
+)
 
 
 class TaskRepository:
@@ -60,6 +65,29 @@ class TaskRepository:
         row.status = status.value if hasattr(status, "value") else str(status)
         row.updated_at = datetime.now(timezone.utc)
         self.session.flush()
+
+    def fail_orphaned_runs(self) -> int:
+        """进程启动时回收孤儿任务：重启前处于运行态的任务已无执行线程，
+        统一标记 FAILED（步骤 RUNNING → FAILED_RETRYABLE），使「恢复/重跑」可用。
+        返回回收任务数。"""
+        now = datetime.now(timezone.utc)
+        orphaned_ids = self.session.execute(
+            select(TaskRow.id).where(TaskRow.status.in_(RUNNING_STATUSES))
+        ).scalars().all()
+        if not orphaned_ids:
+            return 0
+        self.session.execute(
+            update(TaskRow)
+            .where(TaskRow.id.in_(orphaned_ids))
+            .values(status="FAILED", updated_at=now)
+        )
+        self.session.execute(
+            update(RunStepRow)
+            .where(RunStepRow.task_id.in_(orphaned_ids), RunStepRow.status == "RUNNING")
+            .values(status="FAILED_RETRYABLE", error="backend restarted mid-run", ended_at=now)
+        )
+        self.session.flush()
+        return len(orphaned_ids)
 
     # ------------------------------------------------------------------ steps
 

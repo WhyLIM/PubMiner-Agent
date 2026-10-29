@@ -88,6 +88,44 @@ def _domain_document():
     )
 
 
+class TestTaskOrphanRecovery:
+    def test_running_tasks_marked_failed_and_resumable(self, session_factory):
+        """进程重启后孤儿任务回收：运行态任务 → FAILED，RUNNING 步 → FAILED_RETRYABLE。"""
+        from uuid import uuid4
+
+        from pubminer.infrastructure.db.base import session_scope
+        from pubminer.infrastructure.db.orm_tasks import RunStepRow, TaskRow
+        from pubminer.infrastructure.db.repositories.workflow import TaskRepository
+
+        orphan_id, done_id = uuid4(), uuid4()
+        with session_scope(session_factory) as session:
+            for tid, status in ((orphan_id, "EXTRACTING"), (done_id, "REVIEW_READY")):
+                session.add(TaskRow(id=tid, session_id=None, kind="mining", request={}, status=status))
+                session.flush()
+            session.add(RunStepRow(task_id=orphan_id, step_index=0, step_type="SEARCH", status="SUCCEEDED"))
+            session.add(RunStepRow(task_id=orphan_id, step_index=1, step_type="EXTRACT", status="RUNNING"))
+            session.flush()
+
+            recovered = TaskRepository(session).fail_orphaned_runs()
+            assert recovered == 1
+
+            orphan = session.get(TaskRow, orphan_id)
+            done = session.get(TaskRow, done_id)
+            assert orphan.status == "FAILED"
+            assert done.status == "REVIEW_READY"  # 终态任务不受影响
+            steps = session.execute(
+                __import__("sqlalchemy").select(RunStepRow).where(RunStepRow.task_id == orphan_id)
+            ).scalars().all()
+            by_type = {s.step_type: s for s in steps}
+            assert by_type["SEARCH"].status == "SUCCEEDED"
+            assert by_type["EXTRACT"].status == "FAILED_RETRYABLE"
+            assert "restarted" in by_type["EXTRACT"].error
+
+            # 回收后 first_failed_step_index 命中中断步，「恢复/重跑」可用
+            idx = TaskRepository(session).first_failed_step_index(orphan_id)
+            assert idx == 1
+
+
 class TestDocumentRepository:
     def test_upsert_and_dedupe(self, session_factory):
         from pubminer.infrastructure.db.repositories.documents import DocumentRepository
