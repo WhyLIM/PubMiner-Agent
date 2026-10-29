@@ -110,11 +110,6 @@ class GoalParseAdapter:
             for i, si in enumerate(payload.get("search_intents", []))
             if si.get("query")
         ]
-        clarification = payload.get("clarification", {}) or {}
-        result["clarification"] = {
-            "needed": bool(clarification.get("needed", False)),
-            "question": clarification.get("question"),
-        }
         return result
 
     @staticmethod

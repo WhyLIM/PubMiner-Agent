@@ -522,6 +522,16 @@ const FIELD_LABELS: Record<string, string> = {
   validation_requirement: '验证要求',
 };
 
+/** 兜底问题（缺必填字段时）的候选选项；括号内提示 LLM 映射到标准枚举值 */
+const FIELD_OPTIONS: Record<string, SetupQuestion['options']> = {
+  task: [
+    { label: '预后（预后标志物）', description: '关注疾病结局、生存与进展预测' },
+    { label: '诊断（诊断标志物）', description: '关注疾病诊断与鉴别诊断' },
+    { label: '预测（疗效预测标志物）', description: '关注治疗反应与疗效预测' },
+    { label: '治疗（治疗靶点标志物）', description: '关注治疗干预与靶点响应' },
+  ],
+};
+
 function buildGoalSummary(fields: Record<string, unknown>, intents: Array<{ name: string; query: string; explanation: string }>): string {
   const lines: string[] = [];
   const parts: string[] = [];
@@ -579,11 +589,21 @@ async function applyParse() {
     // 追问触发：LLM 结构化问题（dsh 式卡片），或缺失必填字段（确定性信号 → 生成结构化卡片）
     const clarification = res.clarification ?? {};
     const missing = res.missing_required_fields ?? [];
+    // 同一问题（同 id / 同文本）只问一轮：回答未能映射成字段时不再重复追问，转检索式确认兜底
+    const askedIds = new Set<string>();
+    const askedTexts = new Set<string>();
+    for (const m of s.messages) {
+      for (const q of m.questions ?? []) { askedIds.add(q.id); }
+      askedTexts.add(m.text);
+    }
     const llmQuestions: SetupQuestion[] = ((clarification.questions ?? []) as SetupQuestion[]).filter(
-      q => q.id && q.question,
+      q => q.id && q.question && !askedIds.has(q.id),
     );
-    const missingFields = missing.filter(f => !(f in s.fields));
-    const needsClarify = (llmQuestions.length || (clarification.needed && clarification.question) || missingFields.length > 0)
+    const missingFields = missing.filter(f => !(f in s.fields) && !askedIds.has(f));
+    const plainQuestion = clarification.question && !askedTexts.has(String(clarification.question))
+      ? String(clarification.question)
+      : null;
+    const needsClarify = (llmQuestions.length || plainQuestion || missingFields.length > 0)
       && s.rounds < MAX_CLARIFY_ROUNDS;
 
     if (needsClarify) {
@@ -597,20 +617,22 @@ async function applyParse() {
           id: f,
           question: `请提供${FIELD_LABELS[f] ?? f}`,
           header: FIELD_LABELS[f] ?? f,
-          options: [],
+          options: FIELD_OPTIONS[f] ? [...FIELD_OPTIONS[f]!] : [],
           multi_select: false,
         }));
       }
       if (questions.length) {
         s.messages.push({ sender: 'ai', text: '有几个信息需要确认（可点选选项或输入自定义答案）：', questions });
-      } else if (clarification.question) {
-        s.messages.push({ sender: 'ai', text: String(clarification.question) });
+      } else if (plainQuestion) {
+        s.messages.push({ sender: 'ai', text: plainQuestion });
       }
     } else {
       // 第二问：检索式审批
       s.phase = 'queries';
       if (s.rounds >= MAX_CLARIFY_ROUNDS) {
         s.messages.push({ sender: 'ai', text: '已达追问上限，将按当前解析结果执行。' });
+      } else if (s.rounds > 0 && (clarification.needed || missing.length > 0)) {
+        s.messages.push({ sender: 'ai', text: '此前追问的信息仍未完全确定，已按当前解析结果继续；如需调整可在下一步补充自定义检索式。' });
       }
       s.messages.push({
         sender: 'ai',

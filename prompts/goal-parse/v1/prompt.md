@@ -15,6 +15,8 @@ Rules:
   Do NOT use tags outside this list.
 - explanation: for EACH search intent, write ONE sentence in Chinese explaining what the query searches for and why, in plain language for non-specialists. Example: "检索 MeSH 主题词为胰腺癌、且标题或摘要中出现 biomarker 和预后关键词的文献"
 - clarification.needed: true when key information is missing or ambiguous (e.g. missing disease, unclear task type). If everything is clear, set to false and use an empty questions list.
+- PRIOR CONTEXT handling: if PRIOR CONTEXT already contains an answer to a question (matching topic or field), incorporate that answer into the fields and do NOT ask the same question again. Only ask about information still missing after considering prior answers. Set needed=false as soon as disease and task are determinable.
+- Multi-direction answers: when the user requests several task directions at once (e.g. "诊断、治疗、预后都需要"), set task to the FIRST-mentioned or primary direction, and make the FIRST search intent a BROAD query that OR-combines all requested directions (e.g. (diagnosis[tiab] OR therapy[tiab] OR prognosis[tiab])) instead of one narrowed query per direction. Direction-specific queries may only supplement after that broad query.
 - clarification.questions: when needed=true, ONE question per missing/ambiguous field, following this exact schema:
   - id: stable short id matching the field (e.g. "disease", "task", "year")
   - question: the specific question, in Chinese, user-facing
