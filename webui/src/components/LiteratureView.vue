@@ -1475,14 +1475,11 @@ async function submitAnswers() {
   const text = parts.length ? parts.join('\n') : '按默认参数执行';
   setupInput.value = '';
   questionAnswers.value = {};
-  s.messages.push({ sender: 'user', text });
-  s.phase = 'parsing';
-  try {
-    await sendClarification(text);
-  } finally {
-    await nextTick();
-    scrollSetupChat();
-  }
+  // phase 置 parsing 与用户消息推送由 sendClarification 负责——
+  // 此处提前改 phase 会触发其 'clarify' 守卫直接 return，卡在解析中
+  await sendClarification(text);
+  await nextTick();
+  scrollSetupChat();
 }
 
 function skipClarify() {
