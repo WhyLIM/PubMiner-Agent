@@ -1,0 +1,50 @@
+{
+  "name": "drug-target-fields",
+  "description": "药物靶标关系抽取的上下文字段",
+  "version": "1.0",
+  "fields": [
+    {
+      "key": "drug_name",
+      "label": "药物名称",
+      "type": "string",
+      "hint": "提取研究中的药物/化合物名称，包括通用名或商品名"
+    },
+    {
+      "key": "target_name",
+      "label": "靶点名称",
+      "type": "string",
+      "hint": "提取药物作用的靶点（基因/蛋白）名称，如激酶、受体等"
+    },
+    {
+      "key": "interaction_type",
+      "label": "相互作用类型",
+      "type": "string",
+      "hint": "提取药物与靶点的相互作用类型：抑制、激活、结合、调节或拮抗等"
+    },
+    {
+      "key": "ic50_ec50",
+      "label": "IC50/EC50",
+      "type": "string",
+      "hint": "提取报告的IC50、EC50、Ki等结合或抑制活性数值及单位"
+    },
+    {
+      "key": "disease_context",
+      "label": "疾病背景",
+      "type": "string",
+      "hint": "提取研究涉及的适应症或疾病背景"
+    },
+    {
+      "key": "evidence_level",
+      "label": "证据级别",
+      "type": "string",
+      "hint": "提取证据类型：体外实验、体内模型、临床试验等"
+    },
+    {
+      "key": "clinical_stage",
+      "label": "临床阶段",
+      "type": "boolean",
+      "hint": "该药物-靶点关系是否有临床（人体）数据支持"
+    }
+  ],
+  "export_mappings": {}
+}

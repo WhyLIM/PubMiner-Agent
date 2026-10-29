@@ -1,39 +1,43 @@
 {
   "name": "drug-target",
-  "display": "Drug-Target Interaction Extraction",
-  "entity_label": "drug-target interaction",
-  "default_task": "drug_target_interaction",
+  "display": "药物靶标关系",
+  "entity_label": "药物靶标",
+  "default_task": "药物靶标关系抽取",
   "entity_types": {
-    "DRUG": "drug",
-    "TARGET": "target_protein",
-    "PATHWAY": "pathway",
-    "OTHER": "other"
+    "DRUG": "药物",
+    "TARGET": "药物靶点",
+    "GENE": "基因",
+    "PROTEIN": "蛋白质",
+    "DISEASE": "疾病",
+    "PATHWAY": "信号通路"
   },
   "predicates": {
     "inhibits": "INHIBITS",
     "activates": "ACTIVATES",
     "binds": "BINDS",
-    "modulates": "MODULATES"
+    "modulates": "MODULATES",
+    "therapeutic": "THERAPEUTIC"
   },
   "directions": [
-    "AGONIST",
-    "ANTAGONIST",
     "INHIBITOR",
     "ACTIVATOR",
+    "AGONIST",
+    "ANTAGONIST",
     "UNSPECIFIED"
   ],
   "outcome_hints": [
-    "IC50",
-    "EC50",
-    "Ki",
-    "binding affinity",
-    "dose response"
+    "靶点抑制/激活效果",
+    "结合亲和力",
+    "治疗响应",
+    "临床终点改善"
   ],
-  "signature_template": "{subject} | {predicate} | {object}",
+  "signature_template": "{subject} {predicate} {object}",
   "verification": {
     "p_value_threshold": 0.05,
-    "iv_min_documents": 2
+    "iv_min_documents": 3
   },
-  "screen_hints": "drug-target interaction, binding affinity, pharmacological modulation",
-  "object_label": "互作对象"
+  "screen_hints": "筛选涉及药物与靶点（基因/蛋白）相互作用的研究，包括抑制、激活、结合、调节关系及相关治疗效应。",
+  "extraction_fields_schema": "drug-target-fields",
+  "export_mappings": {},
+  "object_label": "药物/靶点/疾病"
 }
